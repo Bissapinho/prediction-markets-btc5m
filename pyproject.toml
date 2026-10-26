@@ -2,6 +2,7 @@
 name = "pm-btc5m-study"
 version = "1.0.0"
 description = "Study on Prediction Markets: price formation in BTC 5-min markets"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.27",

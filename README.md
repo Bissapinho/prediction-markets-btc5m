@@ -271,3 +271,7 @@ data_sample/ timestamp_lag_pairs.csv (execution vs block time, 4,479 trades)
 results/     JSON outputs and Markdown tables
 figures/     PNG figures of this README
 ```
+
+## License
+
+Code released under the [MIT License](LICENSE).
