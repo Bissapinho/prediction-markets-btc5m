@@ -1,0 +1,17 @@
+# Versions used to produce the published results (Python 3.13.3, CPU only).
+# torch CPU wheel: pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+httpx==0.28.1
+duckdb==1.5.6
+polars==2.0.0
+pyarrow==26.0.0
+typer==0.27.3
+pydantic==2.14.1
+PyYAML==6.0.3
+zstandard==0.25.0
+tzdata==2026.5
+numpy==2.5.4
+scipy==1.18.1
+scikit-learn==1.9.1
+torch==2.14.1
+pytest==9.1.1
+matplotlib==3.11.2

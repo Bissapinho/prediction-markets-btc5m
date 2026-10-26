@@ -1,0 +1,617 @@
+{
+ "data": {
+  "n_windows": 17856,
+  "n_markets_listed": 17855,
+  "n_unresolved": 0,
+  "n_no_trade_in_window": 295,
+  "n_no_binance": 1,
+  "n_markets": 17559,
+  "first_start_utc": "2026-08-17 00:00",
+  "last_start_utc": "2026-10-17 23:50",
+  "n_trades": 28594392,
+  "n_trades_in_window": 26956412,
+  "notional_usdc": 435740413.7154343,
+  "rows_market_1s": 5267700,
+  "rows_btc_1s": 5358300,
+  "rows_per_second_total": 10626000,
+  "n_binance_aggtrades": 58105834
+ },
+ "meta": {
+  "n_markets": 17559,
+  "n_train": 9784,
+  "n_test": 7775,
+  "split_day": "2026-09-21",
+  "first_day": "2026-08-17",
+  "last_day": "2026-10-17",
+  "bootstrap": 2000,
+  "align_delta_s": 2,
+  "runtime_s": 47.4
+ },
+ "hypotheses": [
+  {
+   "id": "H1",
+   "family": "P",
+   "title": "Lead-lag: buy when Binance moves >= z0 sigma in 3 s and the market has not moved",
+   "kind": "pnl",
+   "execution": "taker, 2 s",
+   "selected": 4,
+   "stat": "mean P&L per share, fees included",
+   "est": 0.010152936096342904,
+   "lo": -0.0014981439107953094,
+   "hi": 0.02189920627375766,
+   "n": 2570,
+   "p": 0.04447776111944028,
+   "p_adj": 0.11119440279860071,
+   "significant": false,
+   "verdict": "Not significant after BH"
+  },
+  {
+   "id": "H2",
+   "family": "P",
+   "title": "TWAP fair value from Binance: buy the side priced below the model",
+   "kind": "pnl",
+   "execution": "taker, 2 s",
+   "selected": 0.05,
+   "stat": "mean P&L per share, fees included",
+   "est": -0.027020283915383466,
+   "lo": -0.03814801737452459,
+   "hi": -0.016828438906619714,
+   "n": 6821,
+   "p": 1.0,
+   "p_adj": 1.0,
+   "significant": false,
+   "verdict": "Rejected: negative P&L"
+  },
+  {
+   "id": "H2-info",
+   "family": "P",
+   "title": "Model minus market predicts the outcome (logit coefficient c > 0)",
+   "kind": "info",
+   "stat": "coefficient c",
+   "est": 0.12428782130805932,
+   "lo": 0.05534399951564122,
+   "hi": 0.19460093432276881,
+   "n": 69975,
+   "p": 0.001996007984031936,
+   "execution": "–",
+   "selected": null,
+   "p_adj": 0.00998003992015968,
+   "significant": true,
+   "verdict": "Information detected after BH; the taker strategy built on it (H2) loses"
+  },
+  {
+   "id": "H3",
+   "family": "P",
+   "title": "Fade price jumps that Binance does not justify",
+   "kind": "pnl",
+   "execution": "taker, 2 s",
+   "selected": 0.08,
+   "stat": "mean P&L per share, fees included",
+   "est": -0.022049764554180066,
+   "lo": -0.03302261432093014,
+   "hi": -0.010672318753003172,
+   "n": 6974,
+   "p": 1.0,
+   "p_adj": 1.0,
+   "significant": false,
+   "verdict": "Rejected: negative P&L"
+  },
+  {
+   "id": "H4",
+   "family": "P",
+   "title": "Late favourites (t = 240-290 s, ask 0.80-0.98)",
+   "kind": "pnl",
+   "execution": "taker, 2 s",
+   "selected": 260,
+   "stat": "mean P&L per share, fees included",
+   "est": -0.004443396217212951,
+   "lo": -0.018608549379338386,
+   "hi": 0.00892482960041809,
+   "n": 1313,
+   "p": 0.7286356821589205,
+   "p_adj": 1.0,
+   "significant": false,
+   "verdict": "Rejected: negative P&L"
+  },
+  {
+   "id": "A1",
+   "family": "A",
+   "title": "Dip-buy: buy a side below 30 c, sell at 33 c",
+   "kind": "pnl",
+   "execution": "taker, 1 s",
+   "selected": null,
+   "stat": "mean P&L per share, fees included",
+   "est": -0.05950635639910076,
+   "lo": -0.06520489245828215,
+   "hi": -0.05449941483101877,
+   "n": 4614,
+   "p": 1.0,
+   "p_adj": 1.0,
+   "significant": false,
+   "verdict": "Rejected: negative P&L"
+  },
+  {
+   "id": "A2",
+   "family": "A",
+   "title": "Dip-buy grid (216 cells), best cell on train",
+   "kind": "pnl",
+   "execution": "limit order",
+   "selected": "0-120 s, x = 0.05, k = 0.01",
+   "stat": "mean P&L per share, fees included",
+   "est": -0.009586206896551723,
+   "lo": -0.011379310344827587,
+   "hi": -0.007655172413793104,
+   "n": 870,
+   "p": 1.0,
+   "p_adj": 1.0,
+   "significant": false,
+   "verdict": "Rejected: negative P&L"
+  },
+  {
+   "id": "A3",
+   "family": "A",
+   "title": "Dip-buy restricted to the 'hesitant' market cluster (defined ex post)",
+   "kind": "pnl",
+   "execution": "limit order",
+   "selected": "cluster 2",
+   "stat": "mean P&L per share, fees included",
+   "est": 0.019373881932021466,
+   "lo": 0.016944950136568635,
+   "hi": 0.021651409379692326,
+   "n": 2236,
+   "p": 0.000999000999000999,
+   "p_adj": 0.006993006993006993,
+   "significant": true,
+   "verdict": "Positive after BH (ex-post cluster, not tradable)"
+  },
+  {
+   "id": "A4",
+   "family": "A",
+   "title": "ML classifier picks the dips that rebound (test AUC 0.59)",
+   "kind": "pnl",
+   "execution": "limit order",
+   "selected": "top 5% scores",
+   "stat": "mean P&L per share, fees included",
+   "est": -0.013905579399141626,
+   "lo": -0.024825027230580166,
+   "hi": -0.0037363490364025705,
+   "n": 466,
+   "p": 1.0,
+   "p_adj": 1.0,
+   "significant": false,
+   "verdict": "Rejected: negative P&L"
+  },
+  {
+   "id": "A5",
+   "family": "A",
+   "title": "Pre-open momentum: buy the side of the last 1-min Binance trend",
+   "kind": "pnl",
+   "execution": "taker, 1 s",
+   "selected": "L = 1 min",
+   "stat": "mean P&L per share, fees included",
+   "est": -0.03607408357676189,
+   "lo": -0.050014590985237445,
+   "hi": -0.022972642928840607,
+   "n": 5393,
+   "p": 1.0,
+   "p_adj": 1.0,
+   "significant": false,
+   "verdict": "Rejected: negative P&L"
+  },
+  {
+   "id": "A6",
+   "family": "A",
+   "title": "TWAP anchor at the open: buy model minus opening price",
+   "kind": "pnl",
+   "execution": "taker, 1 s",
+   "selected": null,
+   "stat": "mean P&L per share, fees included",
+   "est": -0.029532774849957404,
+   "lo": -0.051575565104075585,
+   "hi": -0.0026145647604648207,
+   "n": 1541,
+   "p": 0.9860279441117764,
+   "p_adj": 1.0,
+   "significant": false,
+   "verdict": "Rejected: negative P&L"
+  },
+  {
+   "id": "A7",
+   "family": "A",
+   "title": "End-of-window sniping: buy at <= 99 c a side the model gives > 99.5 %",
+   "kind": "pnl",
+   "execution": "taker, 1 s",
+   "selected": null,
+   "stat": "mean P&L per share, fees included",
+   "est": -0.00765777006096736,
+   "lo": -0.10650070532586237,
+   "hi": 0.0580458676313006,
+   "n": 23,
+   "p": 0.5369261477045908,
+   "p_adj": 1.0,
+   "significant": false,
+   "verdict": "Rejected: negative P&L"
+  },
+  {
+   "id": "A8",
+   "family": "–",
+   "title": "Pair arbitrage (Up + Down < 1 $)",
+   "kind": "artefact",
+   "stat": "share of seconds with ask_up + ask_dn < 1",
+   "est": 0.5195722257946236,
+   "lo": null,
+   "hi": null,
+   "n": 919083,
+   "p": null,
+   "p_adj": null,
+   "significant": null,
+   "execution": "–",
+   "selected": null,
+   "verdict": "Artefact: the two prices come from different instants of the same second"
+  },
+  {
+   "id": "A9",
+   "family": "I",
+   "title": "Under-reaction at the open: slope of outcome on logit(price), 10-40 s (H0: slope = 1)",
+   "kind": "info",
+   "stat": "logit slope",
+   "est": 1.2233341182774604,
+   "lo": 1.1495281657428633,
+   "hi": 1.3036068641077836,
+   "n": null,
+   "p": 1.3323735226222766e-08,
+   "execution": "–",
+   "selected": null,
+   "p_adj": 1.998560283933415e-08,
+   "significant": true,
+   "verdict": "Information detected after BH (statistical test, not a P&L test)"
+  },
+  {
+   "id": "A10",
+   "family": "I",
+   "title": "ML forecast of the outcome stacked on the market price",
+   "kind": "info",
+   "stat": "log-loss gain vs market (nats)",
+   "est": 0.0008233995877284151,
+   "lo": 0.00011387875304390634,
+   "hi": 0.0016454619965848144,
+   "n": 69894,
+   "p": 0.017541218452554297,
+   "execution": "–",
+   "selected": null,
+   "p_adj": 0.017541218452554297,
+   "significant": true,
+   "verdict": "Information detected after BH (statistical test, not a P&L test)"
+  },
+  {
+   "id": "A11",
+   "family": "I",
+   "title": "Price residual (not explained by Binance) leads the next 10 s Binance move",
+   "kind": "info",
+   "stat": "mean per-market correlation",
+   "est": 0.08229981475672496,
+   "lo": 0.07854156417725054,
+   "hi": 0.08572299295633672,
+   "n": 7766,
+   "p": 0.0,
+   "execution": "–",
+   "selected": null,
+   "p_adj": 0.0,
+   "significant": true,
+   "verdict": "Information detected after BH (statistical test, not a P&L test)"
+  }
+ ],
+ "ml": [
+  {
+   "model": "Logistic regression",
+   "setting": "standalone",
+   "gain": 0.001893727851580138,
+   "lo": 0.0012036452281913418,
+   "hi": 0.0026697417139440473,
+   "logloss_model": 0.3863632560567111,
+   "logloss_market": 0.3882569839082913,
+   "p": 2.0603733197344098e-07,
+   "p_adj": 1.6482986557875279e-06,
+   "significant": true
+  },
+  {
+   "model": "Gradient boosting (HistGB)",
+   "setting": "standalone",
+   "gain": -0.011400043484729097,
+   "lo": -0.0146057398125095,
+   "hi": -0.0083975848637296,
+   "logloss_model": 0.3996570273930204,
+   "logloss_market": 0.3882569839082913,
+   "p": 0.9999999999996949,
+   "p_adj": 0.9999999999996949,
+   "significant": false
+  },
+  {
+   "model": "MLP (64, 32)",
+   "setting": "standalone",
+   "gain": -0.002615688537422131,
+   "lo": -0.004235515836676941,
+   "hi": -0.0011538920100203883,
+   "logloss_model": 0.39087267244571344,
+   "logloss_market": 0.3882569839082913,
+   "p": 0.9995614504495162,
+   "p_adj": 0.9999999999996949,
+   "significant": false
+  },
+  {
+   "model": "Market price, recalibrated (logistic on logit p)",
+   "setting": "standalone",
+   "gain": 0.0004838039751588047,
+   "lo": 0.00015325884726404555,
+   "hi": 0.0008236618051552021,
+   "logloss_model": 0.3877731799331325,
+   "logloss_market": 0.3882569839082913,
+   "p": 0.002335699520090717,
+   "p_adj": 0.009342798080362869,
+   "significant": true
+  },
+  {
+   "model": "GRU (30 s sequences + static features)",
+   "setting": "standalone",
+   "gain": 0.00016198409039577623,
+   "lo": -0.0010290563215226993,
+   "hi": 0.0013325133870877718,
+   "logloss_model": 0.3883404911122893,
+   "logloss_market": 0.38850247520268505,
+   "p": 0.39401311453926724,
+   "p_adj": 0.6304209832628276,
+   "significant": false
+  },
+  {
+   "model": "Logistic regression",
+   "setting": "stacked on market price",
+   "gain": 0.0008233995877284151,
+   "lo": 0.00011387875304390634,
+   "hi": 0.0016454619965848144,
+   "logloss_model": 0.3874335843205629,
+   "logloss_market": 0.3882569839082913,
+   "p": 0.017541218452554297,
+   "p_adj": 0.046776582540144794,
+   "significant": true
+  },
+  {
+   "model": "Gradient boosting (HistGB)",
+   "setting": "stacked on market price",
+   "gain": -0.0015678777739033998,
+   "lo": -0.0029184544195261486,
+   "hi": -0.0003618500149134917,
+   "logloss_model": 0.3898248616821947,
+   "logloss_market": 0.3882569839082913,
+   "p": 0.9918906676357157,
+   "p_adj": 0.9999999999996949,
+   "significant": false
+  },
+  {
+   "model": "MLP (64, 32)",
+   "setting": "stacked on market price",
+   "gain": 0.00019139131592305108,
+   "lo": -0.0006180771064304126,
+   "hi": 0.0009859492547842365,
+   "logloss_model": 0.3880655925923683,
+   "logloss_market": 0.3882569839082913,
+   "p": 0.31999131065733666,
+   "p_adj": 0.6304209832628276,
+   "significant": false
+  }
+ ],
+ "latency_S1": {
+  "0": {
+   "0": {
+    "mean": 0.16302288577575164,
+    "lo": 0.14829363150725644,
+    "hi": 0.17928439486280792,
+    "n": 2364,
+    "p": 0.0004997501249375312
+   },
+   "1": {
+    "mean": 0.13000768631130594,
+    "lo": 0.11474582858453215,
+    "hi": 0.1455571650730005,
+    "n": 2460,
+    "p": 0.0004997501249375312
+   },
+   "2": {
+    "mean": 0.07649273430314153,
+    "lo": 0.06112989576388129,
+    "hi": 0.09058003831676291,
+    "n": 2477,
+    "p": 0.0004997501249375312
+   },
+   "3": {
+    "mean": 0.010699957436879652,
+    "lo": -0.0030158166172320157,
+    "hi": 0.0245297099552187,
+    "n": 2479,
+    "p": 0.07296351824087956
+   },
+   "5": {
+    "mean": -0.017054992200089526,
+    "lo": -0.030821883900536577,
+    "hi": -0.0028078849769626376,
+    "n": 2466,
+    "p": 0.991504247876062
+   }
+  },
+  "2": {
+   "0": {
+    "mean": 0.12598610780857455,
+    "lo": 0.11213907314887978,
+    "hi": 0.13927193787591804,
+    "n": 2488,
+    "p": 0.0004997501249375312
+   },
+   "1": {
+    "mean": 0.038081011572509045,
+    "lo": 0.025900425116304377,
+    "hi": 0.05057986682830003,
+    "n": 2575,
+    "p": 0.0004997501249375312
+   },
+   "2": {
+    "mean": 0.010152936096342904,
+    "lo": -0.0023190958183106148,
+    "hi": 0.022482307973961176,
+    "n": 2570,
+    "p": 0.051974012993503245
+   },
+   "3": {
+    "mean": 0.00542820023503706,
+    "lo": -0.007052248191229409,
+    "hi": 0.017828430691721454,
+    "n": 2552,
+    "p": 0.20089955022488756
+   },
+   "5": {
+    "mean": 0.005873893067840702,
+    "lo": -0.0077063089334700645,
+    "hi": 0.018748934228808276,
+    "n": 2408,
+    "p": 0.1969015492253873
+   }
+  },
+  "3": {
+   "0": {
+    "mean": 0.03099359942886549,
+    "lo": 0.0163771363598713,
+    "hi": 0.04632460329049563,
+    "n": 1143,
+    "p": 0.0004997501249375312
+   },
+   "1": {
+    "mean": -0.006046064032886719,
+    "lo": -0.019767970586432353,
+    "hi": 0.007760679026524194,
+    "n": 1143,
+    "p": 0.7971014492753623
+   },
+   "2": {
+    "mean": -0.010623590483967596,
+    "lo": -0.02420762305920612,
+    "hi": 0.003019525536620541,
+    "n": 1120,
+    "p": 0.9390304847576212
+   },
+   "3": {
+    "mean": -0.012856784698018533,
+    "lo": -0.027751646015533697,
+    "hi": 0.0008197626218436759,
+    "n": 1079,
+    "p": 0.9675162418790605
+   },
+   "5": {
+    "mean": -0.015220565814480171,
+    "lo": -0.031062684847798103,
+    "hi": 0.0004429360408965007,
+    "n": 939,
+    "p": 0.9715142428785607
+   }
+  }
+ },
+ "timestamp_lag": {
+  "n": 4479,
+  "median": 2.248,
+  "mean": 2.2436193346729176,
+  "q": {
+   "0.01": 1.09334,
+   "0.1": 1.5428,
+   "0.25": 1.8,
+   "0.5": 2.248,
+   "0.75": 2.658,
+   "0.9": 2.959,
+   "0.99": 3.474440000000001
+  },
+  "hist": [
+   {
+    "lo": 0.0,
+    "hi": 0.25,
+    "n": 0
+   },
+   {
+    "lo": 0.25,
+    "hi": 0.5,
+    "n": 0
+   },
+   {
+    "lo": 0.5,
+    "hi": 0.75,
+    "n": 0
+   },
+   {
+    "lo": 0.75,
+    "hi": 1.0,
+    "n": 1
+   },
+   {
+    "lo": 1.0,
+    "hi": 1.25,
+    "n": 176
+   },
+   {
+    "lo": 1.25,
+    "hi": 1.5,
+    "n": 225
+   },
+   {
+    "lo": 1.5,
+    "hi": 1.75,
+    "n": 590
+   },
+   {
+    "lo": 1.75,
+    "hi": 2.0,
+    "n": 550
+   },
+   {
+    "lo": 2.0,
+    "hi": 2.25,
+    "n": 700
+   },
+   {
+    "lo": 2.25,
+    "hi": 2.5,
+    "n": 736
+   },
+   {
+    "lo": 2.5,
+    "hi": 2.75,
+    "n": 581
+   },
+   {
+    "lo": 2.75,
+    "hi": 3.0,
+    "n": 543
+   },
+   {
+    "lo": 3.0,
+    "hi": 3.25,
+    "n": 193
+   },
+   {
+    "lo": 3.25,
+    "hi": 3.5,
+    "n": 150
+   },
+   {
+    "lo": 3.5,
+    "hi": 3.75,
+    "n": 25
+   },
+   {
+    "lo": 3.75,
+    "hi": 4.0,
+    "n": 9
+   }
+  ]
+ },
+ "mde": {
+  "H1": 0.014841325223355208,
+  "H2": 0.013523360345134853,
+  "H3": 0.014177161206088787,
+  "H4": 0.017464876522908068
+ }
+}
