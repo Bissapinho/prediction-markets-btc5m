@@ -61,10 +61,10 @@
  },
  "features": [
   "t",
-  "ecart_modele",
+  "model_gap",
   "btc_5s",
-  "residu",
-  "flux_10s",
+  "resid",
+  "flow_10s",
   "log_sigma",
   "dp_10s",
   "trades_10s"

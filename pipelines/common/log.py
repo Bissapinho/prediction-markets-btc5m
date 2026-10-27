@@ -1,4 +1,4 @@
-"""Logs structurés JSON (spec 4.5)."""
+"""Structured JSON logs."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class JsonFormatter(logging.Formatter):
 
 
 def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:
-    """Logs vers stderr, ou vers un fichier tourné chaque jour (UTC, 14 jours) si `log_file` est donné."""
+    """Logs to stderr, or to a file rotated daily (UTC, 14 days kept) when `log_file` is given."""
     if log_file is not None:
         log_file.parent.mkdir(parents=True, exist_ok=True)
         handler: logging.Handler = logging.handlers.TimedRotatingFileHandler(
@@ -46,5 +46,5 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def log(logger: logging.Logger, msg: str, level: int = logging.INFO, **fields) -> None:
-    """Exemple : log(logger, "window done", pipeline="markets", unit="2026-10-01T06", n_rows=73)."""
+    """Example: log(logger, "window done", pipeline="markets", unit="2026-10-01T06", n_rows=73)."""
     logger.log(level, msg, extra={"fields": fields})

@@ -172,7 +172,7 @@ def hypotheses() -> list[dict]:
              {"market": {"lo": os_["lo"][1], "hi": os_["hi"][1]},
               **{u: {"lo": os_[u]["lo"][1], "hi": os_[u]["hi"][1], "n_groups": os_[u]["n_groups"]} for u in ("day", "hour")}},
              h0=1.0)
-    st = dD["D1_stacked"]["logistique"]
+    st = dD["D1_stacked"]["logistic"]
     info_row("A10", "I", "ML forecast of the outcome stacked on the market price", "log-loss gain vs market (nats)", st["gain"],
              dD["D1_outcome"]["n_test_rows"],
              {"market": {"lo": st["lo"], "hi": st["hi"]},
@@ -224,8 +224,8 @@ def verdict(r: dict) -> str:
 # ML / DL, latency, power
 # --------------------------------------------------------------------------------------------------------------------
 
-NAMES = {"logistique": "Logistic regression", "gradient boosting": "Gradient boosting (HistGB)", "MLP": "MLP (64, 32)",
-         "marché recalibré": "Market price, recalibrated (logistic on logit p)"}
+NAMES = {"logistic": "Logistic regression", "gradient boosting": "Gradient boosting (HistGB)", "MLP": "MLP (64, 32)",
+         "market recalibrated": "Market price, recalibrated (logistic on logit p)"}
 
 
 def ml_rows() -> list[dict]:
@@ -386,9 +386,9 @@ def key_figures(dc, r2, hyp, ml, lat, lag, md, a11) -> list:
     model_k = [
         ("Fair-value model, fitted on train", f"k = {model['k_star']:.2f}, τ = {model['tau_star']:.0e}", "results/results_delta2.json (model)"),
         ("Model reproduces the outcome at t = 299 s (test)", f"{model['outcome_agreement_t299']['test']:.1%}", "results/results_delta2.json (model)"),
-        ("Test log-loss, market vs model, 10-90 s", f"{h2s['test|debut (10-90 s)']['logloss_market']:.3f} vs {h2s['test|debut (10-90 s)']['logloss_model']:.3f}", "results/results_delta2.json (H2.scores)"),
-        ("Test log-loss, market vs model, 100-230 s", f"{h2s['test|milieu (100-230 s)']['logloss_market']:.3f} vs {h2s['test|milieu (100-230 s)']['logloss_model']:.3f}", "results/results_delta2.json (H2.scores)"),
-        ("Test log-loss, market vs model, 240-290 s", f"{h2s['test|fin (240-290 s)']['logloss_market']:.3f} vs {h2s['test|fin (240-290 s)']['logloss_model']:.3f}", "results/results_delta2.json (H2.scores)"),
+        ("Test log-loss, market vs model, 10-90 s", f"{h2s['test|early (10-90 s)']['logloss_market']:.3f} vs {h2s['test|early (10-90 s)']['logloss_model']:.3f}", "results/results_delta2.json (H2.scores)"),
+        ("Test log-loss, market vs model, 100-230 s", f"{h2s['test|middle (100-230 s)']['logloss_market']:.3f} vs {h2s['test|middle (100-230 s)']['logloss_model']:.3f}", "results/results_delta2.json (H2.scores)"),
+        ("Test log-loss, market vs model, 240-290 s", f"{h2s['test|late (240-290 s)']['logloss_market']:.3f} vs {h2s['test|late (240-290 s)']['logloss_model']:.3f}", "results/results_delta2.json (H2.scores)"),
     ]
     tests = [
         ("Hypotheses in the public table", f"{len({r['id'].split('-')[0] for r in hyp})}", "results/hypotheses.md"),
@@ -441,6 +441,34 @@ def key_figures(dc, r2, hyp, ml, lat, lag, md, a11) -> list:
             ("Timestamp bias and lead-lag", lag_k), ("A11 robustness", a11_k)]
 
 
+def constants(r2, e2, e8) -> list:
+    """Protocol constants quoted in README.md / docs/METHODS.md, with the file that defines them."""
+    from analysis import blockboot, run
+    S = r2["strategies"]
+    return [
+        ("Five-minute window, markets per UTC day", f"300 s, {86400 // 300} markets", "config.yaml (duration), analysis/data.py (T)"),
+        ("Resolution TWAP / pre-market volatility window", "60-second TWAP; 30-minute realised volatility (σ), 1,800 s", "analysis/run.py (L_TWAP, sigma_pre)"),
+        ("Bootstrap draws: P&L by market (H1-H4) / blocks (day, hour)", f"{run.B:,} / {blockboot.B:,}", "analysis/run.py (B), analysis/blockboot.py (B)"),
+        ("Bootstrap draws: H1 regression and H2 logit / A9 logit", "500 / 300", "analysis/run.py, analysis/deep_extra.py"),
+        ("Benjamini-Hochberg level", f"q = {Q}", "analysis/summary.py (Q)"),
+        ("Minimum trades on train for a strategy threshold", "200", "analysis/run.py (main)"),
+        ("Validation days for early stopping and stacking", "last 5 days of train", "analysis/deep_cd.py, analysis/deep_stack.py"),
+        ("Taker fee", f"{run.FEE_RATE} · p · (1 − p) per share: {run.fee(0.5) * 100:.2f} c at 50 c, {run.fee(0.95) * 100:.2f} c at 95 c", "analysis/run.py (fee), docs/data_notes.md"),
+        ("Execution latency L", "2 s (H1-H4), 1 s (A family); grid 0, 1, 2, 3, 5 s", "analysis/run.py, analysis/edges.py"),
+        ("Ask validity / bin of the timestamp histogram", "3 s / 0.25 s", "analysis/data.py (ASK_MAX_AGE), analysis/timestamp_lag.py"),
+        ("Selected thresholds on train", f"H1 z0 = {S['S1']['selected']} σ in 3 s; H2 θ = {S['S2']['selected'] * 100:.0f} c; "
+         f"H3 jump {S['S3']['selected'] * 100:.0f} c in 5 s; H4 t = {S['S4']['selected']} s, ask 0.80-0.98", "results/results_delta2.json (strategies)"),
+        ("A1 / A7 thresholds", "buy ≤ 30 c, sell ≥ 33 c / ask ≤ 99 c, model > 99.5 %", "analysis/edges.py"),
+        ("A2 grid / A4 test AUC", f"{len(e2['grid'])} cells / {e8['auc_test']:.2f}", "results/edges_E2.json, results/edges_E8.json"),
+        ("ML features / snapshots", "28 features; t = 30, 60, ..., 270 s", "analysis/deep_cd.py (_features, SNAPS)"),
+        ("ML models", "logistic regression C = 1; MLP (64, 32); GRU hidden size 32 on the last 30 s of 6 channels", "analysis/deep_cd.py"),
+        ("Calibration snapshots", "every 10 s", "analysis/run.py (H2)"),
+        ("On-chain check of the trade history", "9,018 / 9,018 trades on 4 markets", "docs/data_notes.md"),
+        ("Venue outage (no trade, markets dropped by the trade filter)", "2026-09-19", "docs/data_notes.md"),
+        ("A11 Binance horizons", "t to t + 10 s; t + 2 to t + 12 s", "analysis/a11_robustness.py (HORIZONS)"),
+    ]
+
+
 def main() -> None:
     dc = data_counts()
     r2 = J("results_delta2")
@@ -450,14 +478,17 @@ def main() -> None:
     lag = J("timestamp_lag")
     a11 = J("a11_robustness")
     md = mde(hyp)
-    K = key_figures(dc, r2, hyp, ml, lat, lag, md, a11)
+    K = key_figures(dc, r2, hyp, ml, lat, lag, md, a11) + [("Protocol constants", constants(r2, J("edges_E2"), J("edges_E8")))]
     out = {"data": dc, "meta": r2["meta"], "hypotheses": hyp, "ml": ml, "latency_S1": lat, "timestamp_lag": lag, "mde": md}
     with open(R / "summary.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1, default=float)
     (R / "hypotheses.md").write_text(md_hyp(hyp), encoding="utf-8")
     (R / "ml.md").write_text(md_ml(ml), encoding="utf-8")
     (R / "latency.md").write_text(md_latency(lat), encoding="utf-8")
-    (R / "key_figures.md").write_text(md_key(K), encoding="utf-8")
+    tables = ("\n# Full tables (copies of results/hypotheses.md, ml.md, latency.md)\n\n" + md_hyp(hyp).replace("## ", "### ")
+              + "\n### ML and DL models\n\n" + md_ml(ml) + "\n### Lead-lag strategy by re-alignment and latency\n\n"
+              + md_latency(lat))
+    (R / "key_figures.md").write_text("# Key figures\n\n" + md_key(K) + tables, encoding="utf-8")
     print(md_key(K))
 
 

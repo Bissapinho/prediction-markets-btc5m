@@ -1,15 +1,15 @@
-"""Prix exécutables par seconde, pré-ouverture comprise (results/edges_cache.npz).
+"""Executable prices per second, pre-open included (results/edges_cache.npz).
 
-Tout est exprimé en « équivalent Up » : u = prix si le token est Up, 1 − prix si c'est Down.
-- Pression acheteuse Up : achat taker Up ou vente taker Down (la contrepartie maker vendait Up à u).
-- Pression vendeuse Up : vente taker Up ou achat taker Down (la contrepartie maker achetait Up à u).
+Everything is expressed as "Up equivalent": u = price if the token is Up, 1 − price if it is Down.
+- Up buying pressure: taker Up buy or taker Down sell (the maker counterparty was selling Up at u).
+- Up selling pressure: taker Up sell or taker Down buy (the maker counterparty was buying Up at u).
 
-Par seconde s ∈ [−300, 305) (recalée de 2 s) :
-- buy_max / buy_min : prix max / min des trades à pression acheteuse Up (ask Up touché) ;
-- sell_min / sell_max : prix min / max des trades à pression vendeuse Up (bid Up touché).
-Un ordre maker d'achat Up à b est considéré exécuté seulement si un trade vendeur passe STRICTEMENT sous b
-(sell_min < b), et une vente maker à a si un trade acheteur passe strictement au-dessus (buy_max > a) :
-hypothèse prudente qui ignore la file d'attente au même prix.
+Per second s ∈ [−300, 305) (re-aligned by 2 s):
+- buy_max / buy_min: max / min price of the trades with Up buying pressure (Up ask hit);
+- sell_min / sell_max: min / max price of the trades with Up selling pressure (Up bid hit).
+A maker buy order for Up at b counts as filled only if a selling trade goes STRICTLY below b (sell_min < b), and a
+maker sell at a only if a buying trade goes strictly above (buy_max > a): a prudent assumption that ignores the queue
+at the same price.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def build() -> dict:
     up = D["tr_up"][ok]; buy = D["tr_buy"][ok]; p = D["tr_price"][ok].astype(np.float64)
     q = D["tr_size"][ok].astype(np.float64)
     u = np.where(up, p, 1 - p)
-    press_up = up == buy                      # achat Up ou vente Down
+    press_up = up == buy                      # Up buy or Down sell
     flat = i.astype(np.int64) * W + col
     def agg(mask, fn, init):
         a = np.full(n * W, init)

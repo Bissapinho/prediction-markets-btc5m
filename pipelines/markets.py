@@ -1,13 +1,13 @@
-"""Pipeline `markets` (spec 3.1, S1 Gamma).
+"""Pipeline `markets`: market metadata from the venue's public market API.
 
-Stratégie (docs/data_notes.md) :
-1. Liste les events de la série par fenêtres de `endDate` de `window_hours`
-   (`/events?series_id=..&end_date_min=..&end_date_max=..`). Une fenêtre de 6 h = 73 events,
-   une seule page ; on évite le plafond d'offset de /events (~3000).
-2. Pour chaque début attendu absent de la liste, repli sur `/events?slug=...`.
-3. Chaque page est écrite telle quelle dans `raw/gamma/...` (jamais réécrite).
-4. `build_markets_clean` reconstruit `clean/markets/markets.parquet` à partir de tout le raw.
-5. Un statut par marché va dans le manifeste : ok, missing, not_resolved, error.
+Strategy (docs/data_notes.md):
+1. List the events of the series by `endDate` windows of `window_hours`
+   (`/events?series_id=..&end_date_min=..&end_date_max=..`). A 6 h window = 73 events,
+   a single page; this avoids the offset cap of /events (~3000).
+2. For each expected start missing from the list, fall back to `/events?slug=...`.
+3. Each page is written as is under `raw/gamma/...` (never rewritten).
+4. `build_markets_clean` rebuilds `clean/markets/markets.parquet` from the whole raw layer.
+5. One status per market goes to the manifest: ok, missing, not_resolved, error.
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ def _float(v: Any) -> float | None:
 
 
 def _outcome(closed: bool, outcomes: list, prices: list) -> str | None:
-    """'up' / 'down' seulement si le marché est fermé et que les prix sont exactement 1/0."""
+    """'up' / 'down' only if the market is closed and the prices are exactly 1/0."""
     if not closed or len(outcomes) != 2 or len(prices) != 2:
         return None
     by_name = {str(o).lower(): _float(p) for o, p in zip(outcomes, prices)}
@@ -111,7 +111,7 @@ def _outcome(closed: bool, outcomes: list, prices: list) -> str | None:
 
 
 def parse_event(event: dict, fetched_at_ms: int, default_asset: str, default_duration_s: int) -> list[dict]:
-    """Un event Gamma -> une ligne `markets` par marché (normalement un seul)."""
+    """One market-API event -> one `markets` row per market (normally a single one)."""
     rows = []
     meta = event.get("eventMetadata") or {}
     price_start = _float(meta.get("priceToBeat"))
@@ -136,7 +136,7 @@ def parse_event(event: dict, fetched_at_ms: int, default_asset: str, default_dur
                 "slug": slug,
                 "asset": crypto_cfg.get("asset") or default_asset,
                 "duration_s": duration_s,
-                # Début = timestamp du slug. `startDate` est la date de création (docs/data_notes.md).
+                # Start = slug timestamp. `startDate` is the creation date (docs/data_notes.md).
                 "start_ts_ms": start_ts * 1000,
                 "end_ts_ms": iso_to_ms(m.get("endDate")) or (start_ts + duration_s) * 1000,
                 "event_start_time_ms": iso_to_ms(m.get("eventStartTime") or event.get("startTime")),
@@ -177,9 +177,9 @@ def _raw_event_files(layout: Layout) -> list[Path]:
 
 
 def build_markets_clean(cfg: Config, layout: Layout) -> pl.DataFrame:
-    """Reconstruit `clean/markets/markets.parquet` à partir de toute la couche raw Gamma.
+    """Rebuilds `clean/markets/markets.parquet` from the whole raw market-API layer.
 
-    Pour un même slug, la récupération la plus récente gagne.
+    For a given slug, the most recent fetch wins.
     """
     t0 = time.monotonic()
     rows: list[dict] = []
@@ -220,12 +220,12 @@ class Window:
 
 
 def target_starts(end_ts: int, n_markets: int, duration_s: int) -> list[int]:
-    """Timestamps de début attendus (s) : end_ts - k*duration, k = 0..n-1 (spec 3.1)."""
+    """Expected start timestamps (s): end_ts - k*duration, k = 0..n-1."""
     return [end_ts - k * duration_s for k in range(n_markets)]
 
 
 def windows_for(starts: list[int], duration_s: int, window_hours: int) -> list[Window]:
-    """Fenêtres alignées de `endDate` couvrant tous les marchés cibles."""
+    """Aligned `endDate` windows covering all target markets."""
     step = window_hours * 3600
     lo = floor_to(min(starts) + duration_s, step)
     hi = max(starts) + duration_s
@@ -233,13 +233,13 @@ def windows_for(starts: list[int], duration_s: int, window_hours: int) -> list[W
 
 
 def default_end_ts(cfg: Config) -> int:
-    """Début de la dernière fenêtre fermée depuis au moins `settle_margin_s`."""
+    """Start of the last window closed for at least `settle_margin_s`."""
     d = cfg.duration_s
     return floor_to(now_ms() // 1000 - cfg.gamma.settle_margin_s - d, d)
 
 
 async def _fetch_window(client: HttpClient, cfg: Config, layout: Layout, w: Window) -> list[dict]:
-    """Récupère toutes les pages d'une fenêtre et les écrit dans le raw. Renvoie les events."""
+    """Fetches every page of a window and writes them to the raw layer. Returns the events."""
     events: list[dict] = []
     offset, page = 0, 0
     while True:
@@ -264,7 +264,7 @@ async def _fetch_window(client: HttpClient, cfg: Config, layout: Layout, w: Wind
 
 
 async def _fetch_slug(client: HttpClient, layout: Layout, slug: str, start_ts: int) -> bool:
-    """Repli par slug. Renvoie True si l'event existe."""
+    """Fallback by slug. Returns True if the event exists."""
     data, raw = await client.get_json("/events", {"slug": slug})
     if not data:
         return False
@@ -280,7 +280,7 @@ async def ingest_markets(
     n_markets = n_markets or cfg.n_markets
     end_ts = end_ts if end_ts is not None else default_end_ts(cfg)
     if end_ts % d:
-        raise ValueError(f"end_ts={end_ts} n'est pas un multiple de {d}")
+        raise ValueError(f"end_ts={end_ts} is not a multiple of {d}")
     starts = target_starts(end_ts, n_markets, d)
     windows = windows_for(starts, d, cfg.gamma.window_hours)
     fetch_manifest = Manifest(layout, FETCH_PIPELINE)
@@ -300,12 +300,12 @@ async def ingest_markets(
                 t0 = time.monotonic()
                 try:
                     events = await _fetch_window(client, cfg, layout, w)
-                except Exception as e:  # noqa: BLE001 — une fenêtre en échec ne stoppe pas le pipeline
+                except Exception as e:  # noqa: BLE001 — a failed window does not stop the pipeline
                     fetch_manifest.record(w.key, "error", started_at=started, error=repr(e)[:500], source="gamma_series")
                     log(logger, "window error", logging.ERROR, pipeline=FETCH_PIPELINE, unit=w.key, error=repr(e)[:300])
                     return
-                # Une fenêtre n'est « ok » que si elle est terminée et que tous ses marchés sont fermés ;
-                # sinon elle sera refaite au prochain passage.
+                # A window is "ok" only if it is over and all its markets are closed;
+                # otherwise it is fetched again on the next run.
                 all_closed = all(m.get("closed") for ev in events for m in ev.get("markets") or [])
                 status = "ok" if w.end_ms <= settled_before_ms and all_closed else "partial"
                 fetch_manifest.record(w.key, status, n_rows=len(events), started_at=started, source="gamma_series")
@@ -314,12 +314,12 @@ async def ingest_markets(
 
         await asyncio.gather(*(run_window(w) for w in todo))
 
-        # Repli par slug pour les marchés attendus mais absents de la liste.
+        # Fallback by slug for the markets expected but missing from the list.
         df = build_markets_clean(cfg, layout)
         have = set(df["slug"].to_list())
         missing = [s for s in starts if cfg.slug(s) not in have]
         prev = market_manifest.latest()
-        # Un marché déjà confirmé absent par le repli slug n'est pas redemandé (sauf --force).
+        # A market already confirmed missing by the slug fallback is not requested again (unless --force).
         retry = [
             s for s in missing
             if force or not (prev.get(cfg.slug(s), {}).get("status") == "missing"
@@ -345,7 +345,7 @@ async def ingest_markets(
             if found_any:
                 df = build_markets_clean(cfg, layout)
 
-    # Statut par marché cible.
+    # Status of each target market.
     by_slug = {r["slug"]: r for r in df.select("slug", "closed", "outcome", "token_up", "token_down").iter_rows(named=True)}
     records, counts = [], {"ok": 0, "missing": 0, "not_resolved": 0, "error": 0}
     retried = {cfg.slug(s) for s in retry}
@@ -358,7 +358,7 @@ async def ingest_markets(
             status, err = "missing", None
             source = "gamma_slug" if slug in retried else prev.get(slug, {}).get("source", "gamma_series")
         elif not r["token_up"] or not r["token_down"]:
-            status, err, source = "error", "token ids manquants", "gamma"
+            status, err, source = "error", "missing token ids", "gamma"
         elif r["closed"] and r["outcome"] is not None:
             status, err, source = "ok", None, "gamma"
         else:

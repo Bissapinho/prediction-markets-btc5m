@@ -1,6 +1,6 @@
-"""Analyse phase 2 : applique le protocole (README, section Method) et écrit results/results.json.
+"""H1-H4: applies the protocol (docs/METHODS.md) and writes results/results_delta<delta>.json.
 
-Usage : python -m analysis.run
+Usage: python -m analysis.run <delta>   (re-alignment of the market series, in seconds: 0, 2 or 3)
 """
 
 from __future__ import annotations
@@ -19,11 +19,11 @@ from pipelines.common.storage import Layout
 
 RNG = np.random.default_rng(20261018)
 B = 2000
-SPLIT_DAY = os.environ.get("PM_SPLIT", "2026-09-21")  # début du test (AAAA-MM-JJ)
+SPLIT_DAY = os.environ.get("PM_SPLIT", "2026-09-21")  # first day of the test period (YYYY-MM-DD)
 FEE_RATE = 0.07
 OUT = Path("results")
 
-# Somme_{i,j=0}^{59} min(i, j) / 60² : variance de la partie future de la moyenne TWAP vue d'avant t = 240.
+# Sum_{i,j=0}^{59} min(i, j) / 60²: variance of the future part of the TWAP average, seen from before t = 240.
 L_TWAP = 60
 C_TWAP = (L_TWAP - 1) * L_TWAP * (2 * L_TWAP - 1) / 6 / L_TWAP**2
 
@@ -32,29 +32,29 @@ def fee(p):
     return FEE_RATE * p * (1 - p)
 
 
-# --------------------------------------------------------------------------- modèle
+# --------------------------------------------------------------------------- model
 
 
 def btc_matrix(d: Data, lo: int, hi: int) -> np.ndarray:
-    """Close Binance pour start + [lo, hi), forme (N, hi − lo)."""
+    """Binance close for start + [lo, hi), shape (N, hi − lo)."""
     idx = (d.start_s - d.btc_ts0)[:, None] + np.arange(lo, hi)[None, :]
     return d.btc_close[idx]
 
 
 def sigma_pre(d: Data) -> np.ndarray:
-    """σ par seconde (log), causal : rendements 5 s sur [start − 1800, start) (protocole §3)."""
+    """σ per second (log), causal: 5 s returns over [start − 1800, start)."""
     pre = btc_matrix(d, -1800, 1)[:, ::5]
     r = np.diff(np.log(pre), axis=1)
     return np.sqrt((r**2).mean(axis=1) / 5)
 
 
 def model_inputs(d: Data):
-    """Moyenne attendue de A1 (en log, relative à A0) et variance V(t) en secondes, pour t = 0..299."""
-    S = btc_matrix(d, 0, T)                                        # close fin de seconde t
+    """Expected value of A1 (log, relative to A0) and variance V(t) in seconds, for t = 0..299."""
+    S = btc_matrix(d, 0, T)                                        # close at the end of second t
     A0 = btc_matrix(d, -L_TWAP, 0).mean(axis=1)
     t = np.arange(T)
-    n_f = np.clip(T - 1 - t, 0, None)                              # secondes futures dans [240, 299] après t
-    cum = np.cumsum(np.where(t >= T - L_TWAP, S, 0.0), axis=1)     # somme observée des close de 240..t
+    n_f = np.clip(T - 1 - t, 0, None)                              # future seconds in [240, 299] after t
+    cum = np.cumsum(np.where(t >= T - L_TWAP, S, 0.0), axis=1)     # observed sum of the closes of 240..t
     mean_late = (cum + n_f[None, :] * S) / L_TWAP
     mean = np.where(t[None, :] < T - L_TWAP, S, mean_late)
     V = np.where(t < T - L_TWAP, (T - L_TWAP - t) + C_TWAP, n_f * (n_f + 1) * (2 * n_f + 1) / 6 / L_TWAP**2)
@@ -132,24 +132,24 @@ def bh(pvals: dict[str, float], q: float = 0.05) -> dict[str, dict]:
     return out
 
 
-# --------------------------------------------------------------------------- prix de marché
+# --------------------------------------------------------------------------- market price
 
 
 def market_price(d: Data) -> np.ndarray:
-    """p_mkt(t) : mid (ask_up + 1 − ask_dn)/2 si les deux sont frais, sinon p_up_implied (protocole §2)."""
+    """p_mkt(t): mid (ask_up + 1 − ask_dn)/2 if both are fresh, else p_up_implied."""
     au, ad = d.ask_up[:, :T], d.ask_dn[:, :T]
     mid = (au + (1 - ad)) / 2
     return np.where(np.isnan(mid), d.p_implied, mid)
 
 
-# --------------------------------------------------------------------------- stratégies
+# --------------------------------------------------------------------------- strategies
 
 
 def simulate(d: Data, idx: np.ndarray, signal_t: np.ndarray, signal_side: np.ndarray, L: int) -> dict:
-    """Une position par marché : le premier signal dont le fill à t + L existe.
+    """One position per market: the first signal whose fill at t + L exists.
 
-    signal_t / signal_side : (N, K) temps et côté (+1 Up, −1 Down, 0 aucun) des signaux, triés par t.
-    Renvoie le P&L par share (1{gagne} − ask − frais) des marchés `idx` qui ont tradé.
+    signal_t / signal_side: (N, K) time and side (+1 Up, −1 Down, 0 none) of the signals, sorted by t.
+    Returns the P&L per share (1{win} − ask − fee) of the markets `idx` that traded.
     """
     pnl, tt, side, price, mk = [], [], [], [], []
     for i in idx:
@@ -167,7 +167,7 @@ def simulate(d: Data, idx: np.ndarray, signal_t: np.ndarray, signal_side: np.nda
 
 
 def first_signals(cond_up: np.ndarray, cond_dn: np.ndarray, ts: np.ndarray, kmax: int = 40):
-    """Matrices (N, kmax) des premiers signaux par marché à partir de conditions booléennes (N, len(ts))."""
+    """(N, kmax) matrices of the first signals of each market, from boolean conditions (N, len(ts))."""
     n = cond_up.shape[0]
     st = np.zeros((n, kmax), dtype=int)
     ss = np.zeros((n, kmax), dtype=int)
@@ -230,8 +230,8 @@ def summarize_trades(r: dict, d: Data | None = None) -> dict:
 
 
 def align(d: Data, delta: int) -> Data:
-    """Recale les séries Prediction Market de `delta` secondes : l'horodatage Data API est celui du bloc Polygon,
-    ~2,25 s après l'exécution réelle (mesuré, (docs/data_notes.md). Après recalage, l'indice t ≈ heure d'exécution."""
+    """Shifts the market series by `delta` seconds: the trade-history timestamp is the Polygon block time,
+    ~2.25 s after the execution (measured, docs/data_notes.md). After the shift, index t ≈ execution time."""
     if delta == 0:
         return d
 
@@ -269,7 +269,7 @@ def main(delta: int = 0) -> None:
         },
     }
 
-    # ---------- modèle
+    # ---------- model
     sigma = sigma_pre(d)
     m, V, S, A0 = model_inputs(d)
     snaps = np.arange(10, 291, 10)
@@ -290,15 +290,15 @@ def main(delta: int = 0) -> None:
         "outcome_agreement_t299": {"train": float(agree_end[train].mean()), "test": float(agree_end[test].mean())},
     }
 
-    # ---------- H2 : calibration et pouvoir prédictif
+    # ---------- H2: calibration and predictive power
     def calib(p, yy, bins=10):
         e = np.linspace(0, 1, bins + 1)
         b = np.clip(np.digitize(p, e) - 1, 0, bins - 1)
         return [{"bin": int(k), "p_mean": float(p[b == k].mean()), "y_mean": float(yy[b == k].mean()), "n": int((b == k).sum())}
                 for k in range(bins) if (b == k).sum() >= 30]
 
-    groups = {"debut (10-90 s)": np.arange(10, 91, 10), "milieu (100-230 s)": np.arange(100, 231, 10),
-              "fin (240-290 s)": np.arange(240, 291, 10)}
+    groups = {"early (10-90 s)": np.arange(10, 91, 10), "middle (100-230 s)": np.arange(100, 231, 10),
+              "late (240-290 s)": np.arange(240, 291, 10)}
     h2 = {"scores": {}, "calibration": {}, "logit_by_t": []}
     for split, idx in (("train", train), ("test", test)):
         for g, ts in groups.items():
@@ -341,7 +341,7 @@ def main(delta: int = 0) -> None:
             h2["logit_by_t"].append({"t": int(t), "split": split, "b": float(beta[1]), "c": float(beta[2])})
     res["H2"] = h2
 
-    # ---------- H1 : lead-lag (réponse de Δp_mkt aux variations du modèle ΔP)
+    # ---------- H1: lead-lag (response of Δp_mkt to the changes ΔP of the model)
     lags = list(range(-3, 11))
     ts = np.arange(15, 286)
     dpm = np.diff(pm, axis=1)            # dpm[:, t-1] = pm[t] - pm[t-1]
@@ -351,7 +351,7 @@ def main(delta: int = 0) -> None:
         Y = dpm[idx][:, ts - 1]
         Xs = [dP[idx][:, ts - 1 - k] for k in lags]
         ok = np.isfinite(Y) & np.all([np.isfinite(x) for x in Xs], axis=0)
-        # Statistiques suffisantes par marché -> bootstrap rapide par grappes.
+        # Sufficient statistics per market -> fast cluster bootstrap.
         XtX = np.zeros((len(idx), len(lags), len(lags)))
         Xty = np.zeros((len(idx), len(lags)))
         for j in range(len(idx)):
@@ -385,7 +385,7 @@ def main(delta: int = 0) -> None:
                 h1[split][unit] = {**bb.ci(dr), "n_groups": ng}
     res["H1"] = h1
 
-    # ---------- H4 : calibration par tranche fine en fin de fenêtre (marché vs modèle)
+    # ---------- H4: calibration by fine bin at the end of the window (market vs model)
     late = []
     for t in (240, 255, 270, 280, 290, 295):
         for split, idx in (("train", train), ("test", test)):
@@ -400,7 +400,7 @@ def main(delta: int = 0) -> None:
                          "fav_win_rate": float(favwin[sel].mean()) if sel.any() else None, "n_fav": int(sel.sum())})
     res["H4"] = {"late_calibration": late}
 
-    # ---------- stratégies : sélection sur train, évaluation sur test
+    # ---------- strategies: selection on train, evaluation on test
     strats = {}
     for name, grid in GRIDS.items():
         rows = []
@@ -416,11 +416,11 @@ def main(delta: int = 0) -> None:
             rt = simulate(d, test, st, ss, L=2)
             entry["test"] = summarize_trades(rt, d)
             entry["latency"] = {str(L): summarize_trades(simulate(d, test, st, ss, L=L), d) for L in (0, 1, 2, 3, 5)}
-            # P&L cumulé sur le test (ordre chronologique des marchés) et par semaine.
+            # Cumulative P&L on the test period (markets in chronological order).
             order = np.argsort(d.start_s[rt["market"]]) if len(rt["market"]) else []
             entry["test_curve"] = {"day": d.day[rt["market"][order]].tolist() if len(order) else [],
                                    "cum_pnl": np.cumsum(rt["pnl"][order]).round(4).tolist() if len(order) else []}
-            # Test coupé en deux moitiés chronologiques.
+            # Test period cut into two chronological halves.
             tdays = np.unique(d.day[test])
             mid = tdays[len(tdays) // 2]
             fmt = lambda s: f"{s[8:10]}/{s[5:7]}"
@@ -430,7 +430,7 @@ def main(delta: int = 0) -> None:
                 w = halves[0] if d.day[mi] < mid else halves[1]
                 weeks.setdefault(w, []).append(p)
             entry["test_by_week"] = {w: boot_mean(np.array(v)) for w, v in sorted(weeks.items())}
-            # Edge brut par tranche de prix d'achat (diagnostic).
+            # Raw edge by buy-price bin (diagnostic).
             if len(rt["pnl"]):
                 bins = [0, 0.2, 0.4, 0.6, 0.8, 1.0]
                 bi = np.digitize(rt["price"], bins) - 1
@@ -439,7 +439,7 @@ def main(delta: int = 0) -> None:
         strats[name] = entry
     res["strategies"] = strats
 
-    # ---------- tests multiples (famille primaire, protocole §5)
+    # ---------- multiple testing (family P)
     pv = {"H2_c": res["H2"]["pooled_test"]["p_c"]}
     for name in ("S1", "S2", "S3", "S4"):
         tst = strats[name].get("test")

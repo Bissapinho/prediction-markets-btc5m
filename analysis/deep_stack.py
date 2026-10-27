@@ -1,7 +1,7 @@
-"""D1 bis : modèles ML « empilés » sur le prix de marché (comparaison équitable avec le marché).
+"""D1 stacked: ML models "stacked" on the market price (a like-for-like comparison with the market).
 
-Le modèle est entraîné sur l'exploration hors 5 derniers jours ; une logistique y ~ logit(p_marché) + logit(p_ML)
-est ajustée sur ces 5 jours de validation ; le tout est évalué une fois sur le test.
+Each model is trained on the exploration period minus its last 5 days; a logistic regression
+y ~ logit(p_market) + logit(p_ML) is fitted on these 5 validation days; the whole is evaluated once on the test period.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def main() -> None:
     Af, yf, pf, _, _ = flat(fit); Av, yv, pv, _, _ = flat(val); At, yt, pt, gt, tt = flat(c.test)
     out = {}
     for name, mdl in {
-        "logistique": make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000)),
+        "logistic": make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000)),
         "gradient boosting": HistGradientBoostingClassifier(max_iter=400, learning_rate=0.04, min_samples_leaf=200,
                                                             l2_regularization=1.0, random_state=0),
         "MLP": make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(64, 32), alpha=1e-3, early_stopping=True, random_state=0)),

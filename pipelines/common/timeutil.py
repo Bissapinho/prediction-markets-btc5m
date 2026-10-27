@@ -1,4 +1,4 @@
-"""Temps : tout est en UTC, int64, millisecondes (spec 4.3)."""
+"""Time: everything is UTC, int64, milliseconds."""
 
 from __future__ import annotations
 
@@ -18,12 +18,12 @@ def parse_duration(s: str) -> int:
     """'5m' -> 300."""
     m = _DURATION_RE.match(s)
     if not m:
-        raise ValueError(f"durée invalide : {s!r}")
+        raise ValueError(f"invalid duration: {s!r}")
     return int(m.group(1)) * _UNIT_S[m.group(2)]
 
 
 def iso_to_ms(s: str | None) -> int | None:
-    """ISO 8601 (avec 'Z' ou '+00') -> ms UTC."""
+    """ISO 8601 (with 'Z' or '+00') -> UTC ms."""
     if not s:
         return None
     s = s.strip().replace(" ", "T")

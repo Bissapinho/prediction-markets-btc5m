@@ -1,4 +1,4 @@
-"""Section D (ML / DL) de l'analyse approfondie."""
+"""Section D (ML / DL) of the per-second analyses."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ SNAPS = np.arange(30, 271, 30)
 
 
 def _features(c: Ctx, ts=SNAPS):
-    """Matrice de features (une ligne par marché × instant) ; uniquement de l'information connue à t."""
+    """Feature matrix (one row per market × snapshot); only information known at t."""
     D = c.D
     n = c.n
     x, z, e = c.x, c.z, c.e
@@ -46,7 +46,7 @@ def _features(c: Ctx, ts=SNAPS):
 
 
 def _seq(c: Ctx, ts=SNAPS, L=30):
-    """Séquences des 30 dernières secondes pour le GRU : Δx, Δz, flux, e, x, z (N, len(ts), L, 6)."""
+    """Sequences of the last 30 seconds for the GRU: Δx, Δz, flow, e, x, z (N, len(ts), L, 6)."""
     D = c.D
     dx = np.diff(c.x, axis=1, prepend=np.nan); dz = np.diff(c.z, axis=1, prepend=np.nan)
     flow = np.sign(D["flow_usd"]) * np.log1p(np.abs(D["flow_usd"]) / 100)
@@ -105,9 +105,9 @@ def section_D(c: Ctx) -> dict:
     ok = lambda A: np.all(np.isfinite(A), 1)
     print(f"  D data {time.time() - t0:.0f}s rows fit={len(yf)} test={len(yte)}", flush=True)
 
-    # ---- D1 : outcome
+    # ---- D1: outcome
     models = {}
-    models["logistique"] = make_pipeline(StandardScaler(), LogisticRegression(C=1.0, max_iter=2000))
+    models["logistic"] = make_pipeline(StandardScaler(), LogisticRegression(C=1.0, max_iter=2000))
     models["gradient boosting"] = HistGradientBoostingClassifier(max_iter=600, learning_rate=0.04, max_leaf_nodes=31,
                                                                  min_samples_leaf=200, l2_regularization=1.0,
                                                                  early_stopping=True, validation_fraction=0.15, random_state=0)
@@ -122,12 +122,12 @@ def section_D(c: Ctx) -> dict:
         preds[name] = p
         d1["models"][name] = _compare(p, pte[o_te], yte[o_te], gte[o_te], start_s=c.D["start_s"][gte[o_te]])
         print(f"  D1 {name} {time.time() - t0:.0f}s gain={d1['models'][name]['gain']:.4f}", flush=True)
-    # marché recalibré seul (logistique sur logit(p)) : la référence honnête
+    # recalibrated market price alone (logistic on logit(p)): the fair baseline
     lr = LogisticRegression(max_iter=1000).fit(logit(ptr[o_tr], 0.005)[:, None], ytr[o_tr])
-    d1["models"]["marché recalibré"] = _compare(lr.predict_proba(logit(pte[o_te], 0.005)[:, None])[:, 1], pte[o_te], yte[o_te], gte[o_te],
+    d1["models"]["market recalibrated"] = _compare(lr.predict_proba(logit(pte[o_te], 0.005)[:, None])[:, 1], pte[o_te], yte[o_te], gte[o_te],
                                                 start_s=c.D["start_s"][gte[o_te]])
 
-    # GRU sur les séquences de 60 s + features statiques
+    # GRU on the 30 s sequences + static features
     Sq = _seq(c)
     def tens(mask):
         xs = torch.tensor(Sq[mask].reshape(-1, Sq.shape[2], 6)); xf = X3[mask].reshape(-1, F)
@@ -172,17 +172,17 @@ def section_D(c: Ctx) -> dict:
     net.load_state_dict(best_state)
     with torch.no_grad():
         p_gru = torch.sigmoid(net(sT, fT)).numpy()
-    d1["models"]["GRU (séquence 30 s)"] = _compare(p_gru, pte, yte, gte, start_s=c.D["start_s"][gte])
+    d1["models"]["GRU (30 s sequence)"] = _compare(p_gru, pte, yte, gte, start_s=c.D["start_s"][gte])
     d1["gru_epochs"] = epoch + 1
     print(f"  D1 GRU {time.time() - t0:.0f}s", flush=True)
 
-    # gain par instant pour le meilleur modèle tabulaire
-    best_name = max(["logistique", "gradient boosting", "MLP"], key=lambda k: d1["models"][k]["gain"])
+    # gain by snapshot for the best tabular model
+    best_name = max(["logistic", "gradient boosting", "MLP"], key=lambda k: d1["models"][k]["gain"])
     tt = Xte[o_te][:, names.index("t")]
     d1["by_t"] = [{"t": int(t), **_compare(preds[best_name][tt == t], pte[o_te][tt == t], yte[o_te][tt == t], gte[o_te][tt == t], b=300)}
                   for t in SNAPS]
     d1["best_tabular"] = best_name
-    # importance par permutation (gradient boosting, test)
+    # permutation importance (gradient boosting, test)
     gb = models["gradient boosting"]
     sub = RNG.choice(np.nonzero(o_te)[0], size=min(8000, o_te.sum()), replace=False)
     pi = permutation_importance(gb, Xte[sub], yte[sub], scoring="neg_log_loss", n_repeats=5, random_state=0)
@@ -190,7 +190,7 @@ def section_D(c: Ctx) -> dict:
                                  key=lambda r: -r["drop_logloss"])
     res["D1_outcome"] = d1
 
-    # ---- D2 : variation du prix à 10 s (x_{t+10} − x_t), toutes les 10 s
+    # ---- D2: 10 s price change (x_{t+10} − x_t), every 10 s
     ts2 = np.arange(30, 281, 10)
     X2, _ = _features(c, ts2)
     tgt = c.x[:, ts2 + 10] - c.x[:, ts2]
@@ -212,7 +212,7 @@ def section_D(c: Ctx) -> dict:
         if name == "ridge":
             coefs = mdl[-1].coef_
             d2["ridge_top_coefs"] = sorted([{"feature": n_, "coef_std": float(v)} for n_, v in zip(names, coefs)], key=lambda r: -abs(r["coef_std"]))[:8]
-    # le mouvement prévisible dépasse-t-il le demi-spread ? (en probabilité)
+    # does the predictable move exceed the half-spread? (in probability)
     pr_gb = mdl.predict(A_te[o2])
     xt = A_te[o2][:, names.index("x")]
     p0 = 1 / (1 + np.exp(-xt)); p1 = 1 / (1 + np.exp(-(xt + pr_gb)))
@@ -221,7 +221,7 @@ def section_D(c: Ctx) -> dict:
     res["D2_price_10s"] = d2
     print(f"  D2 {time.time() - t0:.0f}s", flush=True)
 
-    # ---- D3 : prévision de la vol réalisée BTC sur [60, 300) avec l'information connue à t = 60
+    # ---- D3: forecast of the realised BTC vol over [60, 300) with the information known at t = 60
     D = c.D
     S = D["S"]; sig = D["sigma"]
     r5 = np.diff(np.log(S[:, ::5]), axis=1)
@@ -238,11 +238,11 @@ def section_D(c: Ctx) -> dict:
     iv = np.where(good, 0.5 * np.log(np.clip(((D["m"][:, t] / np.where(good, q, 1)) ** 2 - (4e-5) ** 2) / D["V"][t], 1e-16, None)), np.nan)
     base = np.column_stack([np.log(sig), rv_first, rv_5m, rv_1h, np.sin(2 * np.pi * hour / 24), np.cos(2 * np.pi * hour / 24), (dow >= 5)])
     d3 = {}
-    for label, Xv3 in (("HAR (vol passées + heure)", base), ("HAR + vol implicite Prediction Market", np.column_stack([base, iv]))):
-        for mname, mdl in (("linéaire", make_pipeline(StandardScaler(), Ridge(alpha=1.0))),
+    for label, Xv3 in (("HAR (past vol + hour)", base), ("HAR + market implied vol", np.column_stack([base, iv]))):
+        for mname, mdl in (("linear", make_pipeline(StandardScaler(), Ridge(alpha=1.0))),
                            ("gradient boosting", HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05, min_samples_leaf=100, random_state=0))):
             sel_tr = c.train & np.all(np.isfinite(Xv3), 1); sel_te = c.test & np.all(np.isfinite(Xv3), 1)
-            # même échantillon pour les deux spécifications : marchés avec une vol implicite définie
+            # same sample for both specifications: markets with a defined implied vol
             sel_tr &= np.isfinite(iv); sel_te &= np.isfinite(iv)
             mdl.fit(Xv3[sel_tr], rv_after[sel_tr])
             pr = mdl.predict(Xv3[sel_te])

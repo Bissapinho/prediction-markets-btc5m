@@ -1,4 +1,4 @@
-"""Chargement et validation de config.yaml."""
+"""Loading and validation of config.yaml."""
 
 from __future__ import annotations
 

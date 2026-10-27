@@ -1,14 +1,14 @@
-"""Tables d'analyse (spec 5.4) : `btc_1s` et `market_1s`, construites avec DuckDB depuis la couche clean.
+"""Analysis tables `btc_1s` and `market_1s`, built with DuckDB from the clean layer.
 
-Conventions (docs/data_notes.md) :
-- Une seconde `ts_s` couvre [ts_s, ts_s + 1). Les valeurs « last » sont l'état **à la fin** de la seconde.
-- `btc_1s` : barres Binance de 1 s. Les secondes sans trade reprennent le close précédent (`is_filled`).
-- `market_1s` : une ligne par marché et par seconde t = 0..299, avec ts_s = start + t.
-  * `p_up_last` / `p_down_last` : prix du dernier trade (taker) Up / Down à ts_s ou avant,
-    trades d'avant l'ouverture compris (ASOF). Dans une même seconde, l'ordre vient de la Data API (`seq`).
-  * `p_up_implied` : le plus récent des deux, exprimé en Up (p_up_last, ou 1 − p_down_last).
-  * `up_age_s` / `down_age_s` : âge du dernier trade en secondes (0 = trade dans la seconde).
-  * `btc_close` : close Binance de la seconde ; `btc_s0` : close de la seconde start − 1 ;
+Conventions (docs/data_notes.md):
+- A second `ts_s` covers [ts_s, ts_s + 1). "last" values are the state **at the end** of the second.
+- `btc_1s`: 1-second Binance bars. Seconds without a trade carry the previous close (`is_filled`).
+- `market_1s`: one row per market and per second t = 0..299, with ts_s = start + t.
+  * `p_up_last` / `p_down_last`: price of the last (taker) Up / Down trade at or before ts_s,
+    including trades before the open (ASOF). Within a second, the order comes from the trade-history API (`seq`).
+  * `p_up_implied`: the more recent of the two, expressed as Up (p_up_last, or 1 − p_down_last).
+  * `up_age_s` / `down_age_s`: age of the last trade in seconds (0 = trade within the second).
+  * `btc_close`: Binance close of the second; `btc_s0`: close of the second start − 1;
     `btc_ret_from_start` = ln(btc_close / btc_s0).
 """
 
@@ -31,7 +31,7 @@ def _posix(p) -> str:
 
 
 def _copy_partitioned(con: duckdb.DuckDBPyConnection, query: str, out_dir, partition_col: str = "date") -> None:
-    """Écrit le résultat d'une requête en Parquet partitionné (Hive), en remplaçant la table entière."""
+    """Writes the result of a query as partitioned (Hive) Parquet, replacing the whole table."""
     tmp = out_dir.with_name(out_dir.name + ".tmp")
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.parent.mkdir(parents=True, exist_ok=True)

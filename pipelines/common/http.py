@@ -1,4 +1,4 @@
-"""Client HTTP async : timeout explicite, retries avec backoff exponentiel + jitter, limite de débit (spec 4.2)."""
+"""Async HTTP client: explicit timeout, retries with exponential backoff + jitter, rate limit."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ class HttpError(Exception):
 
 
 class RateLimiter:
-    """Espace les requêtes d'au moins 1/rate secondes."""
+    """Spaces requests by at least 1/rate seconds."""
 
     def __init__(self, rate_per_s: float):
         self._interval = 1.0 / rate_per_s if rate_per_s > 0 else 0.0
@@ -44,7 +44,7 @@ class RateLimiter:
 
 
 def backoff_delay(attempt: int, base: float = 1.0, cap: float = 60.0) -> float:
-    """Backoff exponentiel avec jitter : base * 2^attempt, borné, multiplié par U(0.5, 1.5)."""
+    """Exponential backoff with jitter: base * 2^attempt, capped, multiplied by U(0.5, 1.5)."""
     return min(cap, base * 2**attempt) * random.uniform(0.5, 1.5)
 
 
@@ -61,7 +61,7 @@ class HttpClient:
         await self._client.aclose()
 
     async def get(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
-        """GET avec retries. Lève HttpError sur un statut non retryable ou après épuisement des retries."""
+        """GET with retries. Raises HttpError on a non-retryable status or once the retries are exhausted."""
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             await self._limiter.acquire()
@@ -88,6 +88,6 @@ class HttpClient:
         raise last_exc
 
     async def get_json(self, path: str, params: dict[str, Any] | None = None) -> tuple[Any, bytes]:
-        """Renvoie (json décodé, octets bruts). Les octets bruts vont dans la couche raw."""
+        """Returns (decoded JSON, raw bytes). The raw bytes go to the raw layer."""
         resp = await self.get(path, params)
         return resp.json(), resp.content

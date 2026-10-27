@@ -1,14 +1,14 @@
-"""Pipeline `trades` (spec 3.2), source Data API (S4) validée on-chain (docs/data_notes.md).
+"""Pipeline `trades`: the venue's public trade-history API, checked on-chain (docs/data_notes.md).
 
-Le subgraph Goldsky (S2) est hors service. La Data API en mode taker
-(`/trades?market=<conditionId>&limit=10000`, `takerOnly=true` par défaut) donne une ligne par match,
-identique aux fills on-chain (prix, taille, timestamp de bloc), en une requête par marché.
+The subgraph source was out of service. The trade-history API in taker mode
+(`/trades?market=<conditionId>&limit=10000`, `takerOnly=true` by default) gives one row per match,
+identical to the on-chain fills (price, size, block timestamp), in one request per market.
 
-- raw   : `raw/dataapi/trades/date=YYYY-MM-DD/<slug>-<fetched_ms>.json.zst` (réponse brute)
-- clean : `clean/trades/date=YYYY-MM-DD/trades.parquet`, trié par (market_id, ts_ms, seq)
-- manifeste : un statut par marché : ok, empty, truncated, error
+- raw:      `raw/dataapi/trades/date=YYYY-MM-DD/<slug>-<fetched_ms>.json.zst` (raw response)
+- clean:    `clean/trades/date=YYYY-MM-DD/trades.parquet`, sorted by (market_id, ts_ms, seq)
+- manifest: one status per market: ok, empty, truncated, error
 
-La date de partition est la date UTC du début du marché, pas celle du trade.
+The partition date is the UTC date of the market start, not of the trade.
 """
 
 from __future__ import annotations
@@ -56,12 +56,12 @@ TRADES_SCHEMA = {
 
 
 def fee_usdc(price: float, shares: float, rate: float, exponent: float) -> float:
-    """Frais taker (docs/data_notes.md), vérifié on-chain) : rate · (p(1−p))^exponent · shares."""
+    """Taker fee (docs/data_notes.md, verified on-chain): rate · (p(1−p))^exponent · shares."""
     return rate * (price * (1.0 - price)) ** exponent * shares
 
 
 def trade_key(tx: str, token: str, wallet: str, side: str, size: float, price: float, ts: int) -> str:
-    """Clé unique de substitution : la Data API ne donne pas le log_index."""
+    """Surrogate unique key: the trade-history API does not give the log_index."""
     raw = f"{tx}|{token}|{wallet}|{side}|{size:.6f}|{price:.10f}|{ts}"
     return hashlib.blake2b(raw.encode(), digest_size=12).hexdigest()
 
@@ -70,10 +70,10 @@ def trade_key(tx: str, token: str, wallet: str, side: str, size: float, price: f
 
 
 def _markets_to_fetch(cfg: Config, layout: Layout, force: bool) -> pl.DataFrame:
-    """Marchés résolus de la table `markets` qui ne sont pas encore `ok` dans le manifeste."""
+    """Resolved markets of the `markets` table that are not `ok` yet in the manifest."""
     path = layout.clean("markets", "markets.parquet")
     if not path.exists():
-        raise FileNotFoundError(f"{path} absent : lancer `pm ingest markets` d'abord")
+        raise FileNotFoundError(f"{path} missing: run `pm ingest markets` first")
     mk = pl.read_parquet(path).filter(pl.col("closed") & pl.col("outcome").is_not_null())
     if force:
         return mk
@@ -104,16 +104,16 @@ async def ingest_trades(cfg: Config, force: bool = False, limit: int | None = No
                 try:
                     data, raw = await client.get_json("/trades", {"market": m["market_id"], "limit": dc.page_limit})
                     if not isinstance(data, list):
-                        raise ValueError(f"réponse inattendue : {str(data)[:200]}")
+                        raise ValueError(f"unexpected response: {str(data)[:200]}")
                     write_zst(layout.raw("dataapi", "trades", f"date={utc_date(m['start_ts_ms'])}",
                                          f"{m['slug']}-{now_ms()}.json.zst"), raw)
                     n = len(data)
-                    # Au plafond de page, des trades anciens peuvent manquer (offset max 10 000 : pas de pagination possible).
+                    # At the page cap, older trades can be missing (max offset 10,000: no pagination possible).
                     status = "truncated" if n >= dc.page_limit else ("ok" if n else "empty")
                     first_ts = min((x["timestamp"] for x in data), default=None)
                     manifest.record(m["slug"], status, n_rows=n, started_at=started, source="data_api",
                                     first_trade_ts=first_ts, market_id=m["market_id"])
-                except Exception as e:  # noqa: BLE001 — un marché en échec ne stoppe pas le pipeline
+                except Exception as e:  # noqa: BLE001 — a failed market does not stop the pipeline
                     status = "error"
                     manifest.record(m["slug"], status, started_at=started, error=repr(e)[:500], source="data_api",
                                     market_id=m["market_id"])
@@ -135,7 +135,7 @@ async def ingest_trades(cfg: Config, force: bool = False, limit: int | None = No
 
 
 def _latest_raw_files(date_dir: Path) -> list[Path]:
-    """Un fichier par marché : la récupération la plus récente."""
+    """One file per market: the most recent fetch."""
     best: dict[str, tuple[int, Path]] = {}
     for p in date_dir.glob("*.json.zst"):
         m = _FILE_RE.match(p.name)
@@ -145,7 +145,7 @@ def _latest_raw_files(date_dir: Path) -> list[Path]:
 
 
 def build_trades_clean(cfg: Config, layout: Layout) -> int:
-    """Reconstruit `clean/trades` à partir du raw, une partition par date."""
+    """Rebuilds `clean/trades` from the raw layer, one partition per date."""
     t0 = time.monotonic()
     mk = pl.read_parquet(layout.clean("markets", "markets.parquet"))
     by_slug = {r["slug"]: r for r in mk.iter_rows(named=True)}
@@ -166,7 +166,7 @@ def build_trades_clean(cfg: Config, layout: Layout) -> int:
                 price, size = float(x["price"]), float(x["size"])
                 cols["trade_key"].append(trade_key(x["transactionHash"], x["asset"], x["proxyWallet"], x["side"], size, price, x["timestamp"]))
                 cols["tx_hash"].append(x["transactionHash"])
-                # L'API renvoie du plus récent au plus ancien : seq croissant = ordre chronologique.
+                # The API returns the most recent trade first: increasing seq = chronological order.
                 cols["seq"].append(n - 1 - i)
                 cols["ts_ms"].append(ts_ms)
                 cols["market_id"].append(m["market_id"])

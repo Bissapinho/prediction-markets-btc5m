@@ -55,5 +55,7 @@ step $PY -m analysis.timestamp_lag
 # Tables, key figures and figures of the README.
 step $PY -m analysis.summary
 step $PY -m analysis.figures
+# Every number of README.md and docs/METHODS.md must appear in results/key_figures.md.
+step $PY scripts/check_figures.py
 echo "=== done; total $SECONDS s"
 echo "${SECONDS}s  total" >> "$LOG"

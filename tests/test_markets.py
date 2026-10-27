@@ -16,7 +16,7 @@ def make_event(closed=True, prices=("1", "0"), outcomes=("Up", "Down"), meta=Tru
             {
                 "conditionId": "0x63af",
                 "slug": "btc-updown-5m-1792336800",
-                # startDate = date de création, pas le début de fenêtre.
+                # startDate = creation date, not the window start.
                 "startDate": "2026-10-17T15:28:27.326418Z",
                 "endDate": "2026-10-18T15:25:00Z",
                 "eventStartTime": "2026-10-18T15:20:00Z",
@@ -85,7 +85,7 @@ def test_windows_cover_all_end_dates():
     for s in starts:
         end_ms = (s + 300) * 1000
         assert any(w.start_ms <= end_ms <= w.end_ms for w in windows)
-    # Fenêtres alignées sur 6 h UTC et contiguës.
+    # Windows aligned on 6 h UTC and contiguous.
     assert all(w.start_ms % (6 * 3600 * 1000) == 0 for w in windows)
     assert all(a.end_ms == b.start_ms for a, b in zip(windows, windows[1:]))
 

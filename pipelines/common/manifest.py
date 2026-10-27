@@ -1,9 +1,8 @@
-"""Manifeste d'ingestion (spec 4.1).
+"""Ingestion manifest.
 
-Stocké en JSONL append-only (`data/meta/ingest_manifest/<pipeline>.jsonl`) plutôt qu'en Parquet :
-chaque unité est enregistrée dès qu'elle est finie, donc un arrêt brutal ne perd rien.
-Lecture directe dans DuckDB : `SELECT * FROM read_json_auto('data/meta/ingest_manifest/*.jsonl')`.
-Le statut courant d'une unité est sa dernière ligne.
+Stored as append-only JSONL (`data/meta/ingest_manifest/<pipeline>.jsonl`) rather than Parquet: each unit is recorded
+as soon as it is finished, so a crash loses nothing. Read directly in DuckDB:
+`SELECT * FROM read_json_auto('data/meta/ingest_manifest/*.jsonl')`. The current status of a unit is its last line.
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ _PKG_DIR = Path(__file__).resolve().parents[1]
 
 @lru_cache(maxsize=1)
 def code_version() -> str:
-    """Hash git court, suffixé de '-dirty' si l'arbre est modifié ; sinon hash des sources."""
+    """Short git hash, with a '-dirty' suffix if the tree is modified; otherwise a hash of the sources."""
     try:
         sha = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"], cwd=_PKG_DIR, capture_output=True, text=True, check=True
@@ -85,7 +84,7 @@ class Manifest:
         self._latest[unit_key] = rec
 
     def record_many(self, records: list[dict[str, Any]]) -> None:
-        """Écriture groupée (une seule ouverture de fichier) pour les statuts par marché."""
+        """Batched write (one file open) for the per-market statuses."""
         if not records:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)

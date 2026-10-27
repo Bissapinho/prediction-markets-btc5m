@@ -1,4 +1,4 @@
-"""Chargement des données d'analyse en tableaux numpy (N marchés × secondes), ordonnés par début de marché."""
+"""Loads the analysis data as numpy arrays (N markets × seconds), ordered by market start."""
 
 from __future__ import annotations
 
@@ -11,25 +11,25 @@ import numpy as np
 
 from pipelines.common.storage import Layout
 
-T = 300           # secondes par fenêtre
-T_EXT = 310       # grille étendue pour les fills à t + L
-ASK_MAX_AGE = 3   # un ask n'est valable que s'il a ≤ 3 s (protocole §2)
+T = 300           # seconds per window
+T_EXT = 310       # extended grid for the fills at t + L
+ASK_MAX_AGE = 3   # an ask is valid only if it is ≤ 3 s old
 
 
 @dataclass
 class Data:
     market_id: np.ndarray      # (N,)
     start_s: np.ndarray        # (N,) int64
-    day: np.ndarray            # (N,) str AAAA-MM-JJ
+    day: np.ndarray            # (N,) str YYYY-MM-DD
     y: np.ndarray              # (N,) bool, outcome Up
     price_start: np.ndarray    # (N,) Chainlink
     price_end: np.ndarray
-    p_implied: np.ndarray      # (N, T) p_up_implied de market_1s
-    n_trades: np.ndarray       # (N, T) trades Up + Down dans la seconde
-    ask_up: np.ndarray         # (N, T_EXT) NaN si aucun achat taker Up dans les ASK_MAX_AGE s
+    p_implied: np.ndarray      # (N, T) p_up_implied from market_1s
+    n_trades: np.ndarray       # (N, T) Up + Down trades in the second
+    ask_up: np.ndarray         # (N, T_EXT) NaN if no taker Up buy in the last ASK_MAX_AGE s
     ask_dn: np.ndarray
-    btc_ts0: int               # ts_s du premier élément de btc_close
-    btc_close: np.ndarray      # (n_s,) close Binance 1 s, contigu
+    btc_ts0: int               # ts_s of the first element of btc_close
+    btc_close: np.ndarray      # (n_s,) Binance 1 s close, contiguous
 
     @property
     def n(self) -> int:
@@ -37,7 +37,7 @@ class Data:
 
 
 def _f(x) -> np.ndarray:
-    """Colonne DuckDB -> float64, NULL -> NaN (fetchnumpy renvoie des tableaux masqués)."""
+    """DuckDB column -> float64, NULL -> NaN (fetchnumpy returns masked arrays)."""
     return np.ma.filled(np.ma.asarray(x).astype(np.float64), np.nan)
 
 
@@ -45,10 +45,10 @@ def _p(path) -> str:
     return str(path).replace("\\", "/")
 
 
-# Premier jour analysé (PM_START). Avant le ~10/08/2026, les marchés se résolvaient sur le prix spot
-# Chainlink et non sur le TWAP 60 s : le modèle de valeur ne s'applique qu'après (docs/data_notes.md).
+# First day analysed (PM_START). Before ~2026-08-10 the markets resolved on the Chainlink spot price, not on the
+# 60 s TWAP: the fair-value model only applies afterwards (docs/data_notes.md).
 START = os.environ.get("PM_START", "2026-08-17")
-# Prix d'achat simulé : "prudent" (défaut, plancher miroir) ou "dernier" (dernier achat taker seul, optimiste).
+# Simulated buy price: "prudent" (default, mirror-book floor) or any other value (last taker buy only, optimistic).
 ASK_MODE = os.environ.get("PM_ASK", "prudent")
 
 
@@ -61,10 +61,10 @@ def load(layout: Layout) -> Data:
 
     b = con.execute(f"SELECT ts_s, close FROM read_parquet('{btc}', hive_partitioning = false) ORDER BY ts_s").fetchnumpy()
     btc_ts0, btc_close = int(b["ts_s"][0]), b["close"].astype(np.float64)
-    assert len(btc_close) == int(b["ts_s"][-1]) - btc_ts0 + 1, "btc_1s doit être contigu"
+    assert len(btc_close) == int(b["ts_s"][-1]) - btc_ts0 + 1, "btc_1s must be contiguous"
     btc_end = btc_ts0 + len(btc_close) - 1
 
-    # Marchés retenus (protocole §1) : résolus, ≥ 1 trade dans la fenêtre, Binance de start − 1800 à start + 300.
+    # Markets kept: resolved, ≥ 1 trade in the window, Binance from start − 1800 to start + 300.
     con.execute(f"""
         CREATE TEMP TABLE mk AS
         WITH n AS (
@@ -90,7 +90,7 @@ def load(layout: Layout) -> Data:
     p_implied = _f(m["p_up_implied"]).reshape(n, T)
     n_trades = m["n_tr"].astype(np.int32).reshape(n, T)
 
-    # Dernier prix d'achat taker par seconde et par outcome, puis ASOF sur la grille étendue.
+    # Last taker buy price per second and per outcome, then ASOF on the extended grid.
     con.execute(f"""
         CREATE TEMP TABLE buys AS
         SELECT market_id, outcome, ts_ms // 1000 AS ts_s, arg_max(price, seq) AS p
@@ -110,9 +110,9 @@ def load(layout: Layout) -> Data:
     ask_up = _f(a["ask_up"]).reshape(n, T_EXT)
     ask_dn = _f(a["ask_dn"]).reshape(n, T_EXT)
     if ASK_MODE == "prudent":
-        # Les carnets Up et Down sont miroirs : un achat Down à q prouve un bid Up à 1 − q, donc un ask Up ≥ 1 − q.
-        # Sans ce plancher, le dernier achat Up peut être périmé et sous le vrai ask (artefact de paire, (docs/data_notes.md).
-        # Le plancher ne remplace jamais un ask absent (np.maximum garde les NaN, contrairement à np.fmax).
+        # The Up and Down books mirror each other: a Down buy at q proves an Up bid at 1 − q, so an Up ask ≥ 1 − q.
+        # Without this floor, the last Up buy can be stale and below the true ask (pair artefact, docs/data_notes.md).
+        # The floor never replaces a missing ask (np.maximum keeps NaN, unlike np.fmax).
         floor_up, floor_dn = np.nan_to_num(1 - ask_dn, nan=0.0), np.nan_to_num(1 - ask_up, nan=0.0)
         ask_up, ask_dn = np.maximum(ask_up, floor_up), np.maximum(ask_dn, floor_dn)
 

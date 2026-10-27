@@ -1,9 +1,9 @@
-"""Recherche d'edges : probabilités conditionnelles et stratégies exécutables (results/edges_*.json).
+"""Price-path strategies A1-A8: conditional probabilities and executable strategies (results/edges_*.json).
 
-Usage : python -m analysis.edges [E1 E2 ...]
-Conventions : séries recalées de 2 s ; prix exécutables de analysis/edges_data.py ;
-exploration < 2026-09-21 ≤ test ; paramètres choisis sur l'exploration ; IC bootstrap par marché.
-Frais taker 0,07·p(1−p) par share ; ordres limites : aucun frais.
+Usage: python -m analysis.edges [E1 E2 ...]
+Conventions: series re-aligned by 2 s; executable prices from analysis/edges_data.py;
+exploration < 2026-09-21 ≤ test; parameters chosen on the exploration period; bootstrap CIs by market, UTC day and
+UTC hour. Taker fee 0.07·p(1−p) per share; limit orders: no fee.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def fee(p):
 
 
 def mboot(pnl, mk, b=1000, start_s=None):
-    """Moyenne de P&L par trade, IC bootstrap en grappes (marchés)."""
+    """Mean P&L per trade, cluster-bootstrap CI by market (plus UTC day and UTC hour once X() has run)."""
     pnl = np.asarray(pnl, float); mk = np.asarray(mk)
     if len(pnl) < 5:
         return {"n": int(len(pnl)), "mean": None, "lo": None, "hi": None, "p": None}
@@ -45,15 +45,15 @@ def mboot(pnl, mk, b=1000, start_s=None):
 
 
 class X:
-    """Contexte : Ctx de l'analyse approfondie + prix exécutables par côté."""
+    """Context: Ctx of the per-second analyses + executable prices per side."""
 
     def __init__(self):
         self.c = c = Ctx()
         self.start_s = c.D["start_s"]     # market start (Unix s), for the block bootstraps
         E = load()
         self.y = c.y
-        # Pour chaque côté : sl = prix des trades où le token est VENDU par un taker (un maker l'achète),
-        #                    bh = prix des trades où il est ACHETÉ par un taker (un maker le vend).
+        # For each side: sl = price of the trades where the token is SOLD by a taker (a maker buys it),
+        #                bh = price of the trades where it is BOUGHT by a taker (a maker sells it).
         self.side = {
             "up": {"sl": E["sell_min"], "bh": E["buy_max"], "ask": E["buy_max"], "y": c.y},
             "down": {"sl": 1 - E["buy_max"], "bh": 1 - E["sell_min"], "ask": 1 - E["sell_min"], "y": 1 - c.y},
@@ -63,7 +63,7 @@ class X:
         self.P = c.D["P"]
 
 
-# =========================================================================== E1 probabilités conditionnelles
+# =========================================================================== E1 conditional probabilities
 
 
 def E1(x: X) -> dict:
@@ -73,7 +73,7 @@ def E1(x: X) -> dict:
     L, H = x.lo[:, win], x.hi[:, win]
     sides = {"up": (L, H, c.y), "down": (1 - H, 1 - L, 1 - c.y)}
 
-    # (a) l'intuition : un côté passe ≤ x puis remonte ≥ a avant la fin
+    # (a) the intuition: a side goes ≤ x then back ≥ a before the end
     def rebound_table(msk, entry_max=300):
         rows = []
         for xx in (0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45):
@@ -87,7 +87,7 @@ def E1(x: X) -> dict:
                     sel = touched & (first < entry_max) & (first < 299)
                     idx = np.nonzero(sel)[0]
                     ph = lw2[idx, first[idx]]
-                    # max des prix après la première touche
+                    # max price after the first touch
                     hg_after = np.where(np.arange(300)[None, :] > first[idx][:, None], np.nan_to_num(hg2[idx], nan=-1), -1).max(1)
                     emp.append(hg_after >= a); theo.append(ph / a); ph_all.append(ph); winr.append(yy2[idx]); n += len(idx)
                 emp = np.concatenate(emp); theo = np.concatenate(theo); ph_all = np.concatenate(ph_all); winr = np.concatenate(winr)
@@ -97,7 +97,7 @@ def E1(x: X) -> dict:
 
     for name, msk in c.splits():
         res[f"rebound_{name}"] = rebound_table(msk, 240)
-    # fréquence de l'événement « au moins un côté ≤ 0,30 puis ≥ 0,33 » par marché
+    # frequency of the event "at least one side ≤ 0.30 then ≥ 0.33" per market
     for name, msk in c.splits():
         ev = np.zeros(msk.sum(), bool)
         for nm, (lw, hg, yy) in sides.items():
@@ -107,7 +107,7 @@ def E1(x: X) -> dict:
             ev |= touched & (after >= 0.33)
         res[f"claim_30_33_{name}"] = float(ev.mean())
 
-    # (b) A sachant B : outcome selon le chemin
+    # (b) A given B: outcome given the path
     pm = c.D["pm"]
     ab = {}
     for name, msk in c.splits():
@@ -115,26 +115,26 @@ def E1(x: X) -> dict:
         cross = np.nansum(np.abs(np.diff(np.sign(p[:, 10:290] - 0.5), axis=1)) > 0, axis=1)
         lead60 = np.where(p[:, 60] >= 0.5, 1, 0); lead240 = np.where(p[:, 240] >= 0.5, 1, 0)
         r = {}
-        r["P(Up | favori Up à 60 s)"] = boot_stat(yy[lead60 == 1])
-        r["P(favori à 60 s gagne)"] = boot_stat((yy == lead60).astype(float))
-        r["P(favori à 240 s gagne)"] = boot_stat((yy == lead240).astype(float))
-        r["prix moyen du favori à 240 s"] = boot_stat(np.where(lead240 == 1, p[:, 240], 1 - p[:, 240]))
+        r["P(Up | Up favourite at 60 s)"] = boot_stat(yy[lead60 == 1])
+        r["P(favourite at 60 s wins)"] = boot_stat((yy == lead60).astype(float))
+        r["P(favourite at 240 s wins)"] = boot_stat((yy == lead240).astype(float))
+        r["mean price of the favourite at 240 s"] = boot_stat(np.where(lead240 == 1, p[:, 240], 1 - p[:, 240]))
         for k in (0, 1, 2, 4, 8):
             sel = cross >= k if k else cross == 0
-            r[f"part des marchés avec ≥{k} croisements de 50 %" if k else "part sans croisement de 50 % (10-290 s)"] = float(sel.mean())
-        # renversement : favori ≥ 0,80 à un moment puis perd
+            r[f"share of markets with ≥{k} crossings of 50 %" if k else "share without a crossing of 50 % (10-290 s)"] = float(sel.mean())
+        # reversal: favourite ≥ 0.80 at some point, then loses
         fav80 = (np.nanmax(p[:, 10:290], 1) >= 0.8) & (yy == 0) | (np.nanmin(p[:, 10:290], 1) <= 0.2) & (yy == 1)
-        r["P(un côté a valu ≥ 80 c puis a perdu)"] = float(fav80.mean())
+        r["P(a side was worth ≥ 80 c then lost)"] = float(fav80.mean())
         fav90 = (np.nanmax(p[:, 10:290], 1) >= 0.9) & (yy == 0) | (np.nanmin(p[:, 10:290], 1) <= 0.1) & (yy == 1)
-        r["P(un côté a valu ≥ 90 c puis a perdu)"] = float(fav90.mean())
-        # théorie martingale : P(renversement après ≥ 0,9) ≤ 0,1 × P(atteindre 0,9) ; mesure du ratio
+        r["P(a side was worth ≥ 90 c then lost)"] = float(fav90.mean())
+        # martingale theory: P(reversal after ≥ 0.9) ≤ 0.1 × P(reach 0.9); measured ratio
         reach90 = (np.nanmax(p[:, 10:290], 1) >= 0.9) | (np.nanmin(p[:, 10:290], 1) <= 0.1)
-        r["P(perd | a atteint 90 c)"] = float(fav90.sum() / max(reach90.sum(), 1))
+        r["P(loses | reached 90 c)"] = float(fav90.sum() / max(reach90.sum(), 1))
         ab[name] = r
     res["path_conditionals"] = ab
 
-    # (c) probabilité implicite de toucher : le prix à t implique P(toucher a avant la fin) = p/a ;
-    #     comparaison empirique par instant de départ
+    # (c) implied touch probability: the price at t implies P(touch a before the end) = p/a;
+    #     empirical comparison by starting time
     tt = []
     for t in (30, 90, 150, 210, 250):
         for name, msk in c.splits():
@@ -148,7 +148,7 @@ def E1(x: X) -> dict:
     return res
 
 
-# =========================================================================== E2 dip-buy (achat limite à x, sortie à x + k)
+# =========================================================================== E2 dip-buy (limit buy at x, exit at x + k)
 
 
 def _dip_sim(x: X, msk, xx, k, e0, e1, sides=("up", "down")):
@@ -185,11 +185,11 @@ def E2(x: X) -> dict:
     e0, e1 = windows[best["window"]]
     p, m = _dip_sim(x, c.test, best["x"], best["k"], e0, e1)
     res["selected"] = {"window": best["window"], "x": best["x"], "k": best["k"], "train_mean": best["train"]["mean"], "test": mboot(p, m, start_s=x.start_s)}
-    # le cas évoqué : 0,30 → 0,33 sur 0-240 s
+    # the case discussed: 0.30 → 0.33 over 0-240 s
     for name, msk in c.splits():
         p, m = _dip_sim(x, msk, 0.30, 0.03, 0, 240)
         res[f"case_30_33_{name}"] = mboot(p, m, start_s=x.start_s)
-    # version taker du même cas : achat au premier ask ≤ 0,30 (payé au ask 1 s plus tard), revente au bid ≥ 0,33, frais
+    # taker version of the same case: buy at the first ask ≤ 0.30 (paid at the ask 1 s later), sell at a bid ≥ 0.33, fees
     for name, msk in c.splits():
         pnl, mk = [], []
         for sd in ("up", "down"):
@@ -211,14 +211,14 @@ def E2(x: X) -> dict:
     return res
 
 
-# =========================================================================== E3 pré-ouverture et tendance BTC
+# =========================================================================== E3 pre-open and BTC trend
 
 
 def E3(x: X) -> dict:
     c = x.c; D = c.D
     res = {}
     pre = D["btc_pre"]; S = D["S"]
-    # (a) momentum BTC : P(Up | rendement des L dernières minutes avant l'ouverture > 0)
+    # (a) BTC momentum: P(Up | return of the last L minutes before the open > 0)
     mom = []
     for Lm in (1, 3, 5, 15, 30, 60):
         r = np.log(pre[:, -1] / pre[:, -60 * Lm])
@@ -227,7 +227,7 @@ def E3(x: X) -> dict:
             mom.append({"L_min": Lm, "split": name, "p_up_if_up": boot_stat(c.y[up]), "p_up_if_down": boot_stat(c.y[dn]),
                         "corr": nan_corr(r[msk], c.y[msk])})
     res["momentum"] = mom
-    # (b) ancre TWAP : à l'ouverture, m0 = ln(S_0 / A0) est déjà connu (BTC a bougé pendant la minute de référence)
+    # (b) TWAP anchor: at the open, m0 = ln(S_0 / A0) is already known (BTC moved during the reference minute)
     m0 = D["m"][:, 0]; z0 = m0 / (D["sigma"] * np.sqrt(D["V"][0]))
     zb = [-9, -1, -0.5, -0.25, -0.1, 0.1, 0.25, 0.5, 1, 9]
     anc = []
@@ -241,15 +241,15 @@ def E3(x: X) -> dict:
             anc.append({"split": name, "z_lo": zb[kk], "z_hi": zb[kk + 1], "n": int(s.sum()), "p_up": float(c.y[msk][s].mean()),
                         "model": float(np.nanmean(D["P"][msk][s, 0])), "market_open": float(np.nanmean(pm0[s]))})
     res["twap_anchor"] = anc
-    # (c) stratégie : avant/à l'ouverture, acheter le côté indiqué par l'ancre si l'ask est < modèle − θ
-    #     signal à s (−20 … 5 s), exécution au ask observé à s + 1 (taker, frais)
+    # (c) strategy: before / at the open, buy the side given by the anchor if its ask is < model − θ
+    #     signal at s (−20 … 5 s), execution at the ask observed at s + 1 (taker, fees)
     strat = []
     for s_sig in (-20, -10, -5, 0, 3):
         for th in (0.0, 0.02, 0.05):
             row = {"s": s_sig, "theta": th}
             for name, msk in c.splits():
                 ids = np.nonzero(msk)[0]
-                # prix modèle à s : pour s < 0, approximation avec le TWAP partiel connu
+                # model price at s: for s < 0, approximation with the known partial TWAP
                 if s_sig >= 0:
                     Pm = D["P"][ids, s_sig]
                 else:
@@ -268,7 +268,7 @@ def E3(x: X) -> dict:
                 row[name]["coverage"] = float(np.isfinite(au).mean())
             strat.append(row)
     res["anchor_strategy"] = strat
-    # (d) momentum pur exécutable : acheter Up si BTC a monté sur 5 min, au premier ask dans [0, 3] s
+    # (d) executable pure momentum: buy Up if BTC rose over the last L minutes, at the ask at s = 1
     mm = []
     for Lm in (1, 5, 15):
         r = np.log(pre[:, -1] / pre[:, -60 * Lm])
@@ -282,13 +282,13 @@ def E3(x: X) -> dict:
     return res
 
 
-# =========================================================================== E4 fin de fenêtre (sniping) et arbitrage de paire
+# =========================================================================== E4 end of window (sniping) and pair arbitrage
 
 
 def E4(x: X) -> dict:
     c = x.c; D = c.D
     res = {}
-    # (a) sniping : à s ∈ [270, 297], si le modèle TWAP donne ≥ q au côté favori et que son ask ≤ cap → achat taker (ask à s+1)
+    # (a) sniping: at s ∈ [270, 297], if the TWAP model gives ≥ q to the favourite and its ask ≤ cap → taker buy (ask at s+1)
     sn = []
     for qmin in (0.95, 0.98, 0.99, 0.995):
         for cap in (0.95, 0.97, 0.99):
@@ -309,9 +309,9 @@ def E4(x: X) -> dict:
                 row[name] = mboot(np.array(pnl), np.array(mk), 500, start_s=x.start_s)
             sn.append(row)
     res["sniping"] = sn
-    # (b) arbitrage de paire : dans une même seconde, un achat taker Up à a_u et un achat taker Down à a_d avec a_u + a_d < 1
+    # (b) pair arbitrage: within one second, a taker Up buy at a_u and a taker Down buy at a_d with a_u + a_d < 1
     au = x.side["up"]["ask"][:, W0:W0 + 300]
-    ad_min = 1 - np.fmax.reduce([load()["sell_max"][:, W0:W0 + 300]])  # Down le moins cher observé dans la seconde
+    ad_min = 1 - np.fmax.reduce([load()["sell_max"][:, W0:W0 + 300]])  # cheapest Down observed in the second
     au_min = load()["buy_min"][:, W0:W0 + 300]
     s_sum = au_min + ad_min
     arb = {}

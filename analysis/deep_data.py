@@ -1,6 +1,6 @@
-"""Jeu de données de l'analyse approfondie (results/deep_cache.npz).
+"""Data set of the per-second analyses (results/deep_cache.npz).
 
-Toutes les séries Prediction Market sont recalées de DELTA = 2 s (horodatage bloc → exécution, (docs/data_notes.md).
+Every market series is re-aligned by DELTA = 2 s (block timestamp → execution time, docs/data_notes.md).
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def build(k: float = 1.15, tau: float = 4e-5) -> dict:
     con = duckdb.connect()
     con.register("mk", {"market_id": d.market_id, "start_s": d.start_s, "i": np.arange(n)})
     trades = _p(layout.clean("trades")) + "/*/*.parquet"
-    # Flux taker par seconde recalée : + = pousse vers Up (achat Up ou vente Down), − = vers Down.
+    # Taker flow per re-aligned second: + = pushes towards Up (Up buy or Down sell), − = towards Down.
     f = con.execute(f"""
         WITH t AS (
             SELECT mk.i, (tr.ts_ms // 1000 - mk.start_s - {DELTA})::INTEGER AS s, tr.outcome, tr.side,
@@ -50,7 +50,7 @@ def build(k: float = 1.15, tau: float = 4e-5) -> dict:
     flow_sh = np.zeros((n, T)); flow_usd = np.zeros((n, T)); usd = np.zeros((n, T))
     flow_sh[f["i"], f["s"]] = f["flow_sh"]; flow_usd[f["i"], f["s"]] = f["flow_usd"]; usd[f["i"], f["s"]] = f["usd"]
 
-    # Trades individuels (distribution des tailles, flux).
+    # Individual trades (size distribution, flow).
     w = con.execute(f"""
         SELECT mk.i, (tr.ts_ms // 1000 - mk.start_s - {DELTA})::INTEGER AS s, tr.outcome = 'up' AS is_up,
                tr.side = 'buy' AS is_buy, tr.price, tr.size_shares, tr.fee_usdc
@@ -72,7 +72,7 @@ def build(k: float = 1.15, tau: float = 4e-5) -> dict:
 
 
 def load_cache() -> dict:
-    z = np.load(CACHE, allow_pickle=True)  # fichier produit par build() ci-dessus
+    z = np.load(CACHE, allow_pickle=True)  # file written by build() above
     return {k: z[k] for k in z.files}
 
 

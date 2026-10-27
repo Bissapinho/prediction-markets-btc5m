@@ -807,72 +807,72 @@
  "claim_30_33_test": 0.7810970898789595,
  "path_conditionals": {
   "train": {
-   "P(Up | favori Up à 60 s)": {
+   "P(Up | Up favourite at 60 s)": {
     "est": 0.6842534121002241,
     "lo": 0.6718221633733957,
     "hi": 0.6977031982073743,
     "n": 4909
    },
-   "P(favori à 60 s gagne)": {
+   "P(favourite at 60 s wins)": {
     "est": 0.6863246116107932,
     "lo": 0.6772255723630417,
     "hi": 0.6958324816026165,
     "n": 9784
    },
-   "P(favori à 240 s gagne)": {
+   "P(favourite at 240 s wins)": {
     "est": 0.9306009811937858,
     "lo": 0.9257972199509403,
     "hi": 0.9355095053147996,
     "n": 9784
    },
-   "prix moyen du favori à 240 s": {
+   "mean price of the favourite at 240 s": {
     "est": 0.9185355400222398,
     "lo": 0.9162163157283861,
     "hi": 0.9208016924726891,
     "n": 9782
    },
-   "part sans croisement de 50 % (10-290 s)": 0.2867947669664759,
-   "part des marchés avec ≥1 croisements de 50 %": 0.7132052330335241,
-   "part des marchés avec ≥2 croisements de 50 %": 0.5919869174161897,
-   "part des marchés avec ≥4 croisements de 50 %": 0.4081152902698283,
-   "part des marchés avec ≥8 croisements de 50 %": 0.17712591986917417,
-   "P(un côté a valu ≥ 80 c puis a perdu)": 0.2044153720359771,
-   "P(un côté a valu ≥ 90 c puis a perdu)": 0.0865699100572363,
-   "P(perd | a atteint 90 c)": 0.08680057388809183
+   "share without a crossing of 50 % (10-290 s)": 0.2867947669664759,
+   "share of markets with ≥1 crossings of 50 %": 0.7132052330335241,
+   "share of markets with ≥2 crossings of 50 %": 0.5919869174161897,
+   "share of markets with ≥4 crossings of 50 %": 0.4081152902698283,
+   "share of markets with ≥8 crossings of 50 %": 0.17712591986917417,
+   "P(a side was worth ≥ 80 c then lost)": 0.2044153720359771,
+   "P(a side was worth ≥ 90 c then lost)": 0.0865699100572363,
+   "P(loses | reached 90 c)": 0.08680057388809183
   },
   "test": {
-   "P(Up | favori Up à 60 s)": {
+   "P(Up | Up favourite at 60 s)": {
     "est": 0.6935849056603773,
     "lo": 0.679748427672956,
     "hi": 0.7074213836477987,
     "n": 3975
    },
-   "P(favori à 60 s gagne)": {
+   "P(favourite at 60 s wins)": {
     "est": 0.694308524336853,
     "lo": 0.6840072109193922,
     "hi": 0.7044810713365954,
     "n": 7766
    },
-   "P(favori à 240 s gagne)": {
+   "P(favourite at 240 s wins)": {
     "est": 0.9330414627865052,
     "lo": 0.9275012876641772,
     "hi": 0.9383208859129539,
     "n": 7766
    },
-   "prix moyen du favori à 240 s": {
+   "mean price of the favourite at 240 s": {
     "est": 0.9252482225723218,
     "lo": 0.9227655670018702,
     "hi": 0.9277408969122792,
     "n": 7766
    },
-   "part sans croisement de 50 % (10-290 s)": 0.3080092711820757,
-   "part des marchés avec ≥1 croisements de 50 %": 0.6919907288179243,
-   "part des marchés avec ≥2 croisements de 50 %": 0.571594128251352,
-   "part des marchés avec ≥4 croisements de 50 %": 0.40316765387586917,
-   "part des marchés avec ≥8 croisements de 50 %": 0.1758949266031419,
-   "P(un côté a valu ≥ 80 c puis a perdu)": 0.2001030131341746,
-   "P(un côté a valu ≥ 90 c puis a perdu)": 0.08511460211176924,
-   "P(perd | a atteint 90 c)": 0.0853233509745708
+   "share without a crossing of 50 % (10-290 s)": 0.3080092711820757,
+   "share of markets with ≥1 crossings of 50 %": 0.6919907288179243,
+   "share of markets with ≥2 crossings of 50 %": 0.571594128251352,
+   "share of markets with ≥4 crossings of 50 %": 0.40316765387586917,
+   "share of markets with ≥8 crossings of 50 %": 0.1758949266031419,
+   "P(a side was worth ≥ 80 c then lost)": 0.2001030131341746,
+   "P(a side was worth ≥ 90 c then lost)": 0.08511460211176924,
+   "P(loses | reached 90 c)": 0.0853233509745708
   }
  },
  "touch_implied": [

@@ -1,7 +1,7 @@
-"""Écriture des couches raw / clean / features / meta (spec 5.3).
+"""Writing of the raw / clean / features / meta layers.
 
-Toutes les écritures de fichiers complets sont atomiques (fichier temporaire + os.replace).
-La couche raw n'est jamais réécrite : chaque récupération produit un nouveau fichier horodaté.
+Every full-file write is atomic (temporary file + os.replace).
+The raw layer is never rewritten: each fetch produces a new timestamped file.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def write_zst(path: Path, data: bytes, level: int = 10) -> None:
 
 def read_zst(path: Path) -> bytes:
     with open(path, "rb") as f:
-        # read_across_frames : un fichier peut contenir plusieurs frames zstd concaténées.
+        # read_across_frames: a file can hold several concatenated zstd frames.
         return zstd.ZstdDecompressor().stream_reader(f, read_across_frames=True).read()
 
 
@@ -64,7 +64,7 @@ def write_parquet(df: pl.DataFrame, path: Path) -> None:
 
 
 def append_jsonl(path: Path, record: dict[str, Any]) -> None:
-    """Ajout d'une ligne JSON, durable (fsync). Pour les journaux à faible débit (manifeste, trous)."""
+    """Appends one JSON line, durably (fsync). For low-rate journals (manifest, gaps)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, default=str, ensure_ascii=False) + "\n")
@@ -83,5 +83,5 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
                 try:
                     out.append(json.loads(line))
                 except json.JSONDecodeError:
-                    pass  # dernière ligne tronquée après un arrêt brutal
+                    pass  # last line truncated after a crash
     return out

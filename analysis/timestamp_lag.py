@@ -1,8 +1,8 @@
-"""Délai entre l'exécution d'un trade (flux WebSocket du CLOB, ms) et l'horodatage de son bloc (Data API, s).
+"""Delay between the execution of a trade (venue WebSocket feed, ms) and the timestamp of its block (trade-history API, s).
 
-Les paires (heure d'exécution, heure du bloc) sont extraites une fois d'une capture WebSocket d'une journée
-(data/raw/ws/book, non fournie) et publiées dans data_sample/timestamp_lag_pairs.csv, sans hash ni wallet.
-Sans capture locale, le script repart de ce CSV. Sortie : results/timestamp_lag.json.
+The (execution time, block time) pairs were extracted once from a one-day WebSocket capture (data/raw/ws/book, not
+provided) and published in data_sample/timestamp_lag_pairs.csv, without hashes or wallets.
+Without a local capture, the script starts from this CSV. Output: results/timestamp_lag.json.
 Usage : python -m analysis.timestamp_lag [--extract]
 """
 
@@ -42,7 +42,7 @@ def extract_pairs() -> np.ndarray:
                 break
             time.sleep(2 ** attempt)
         else:
-            raise RuntimeError(f"Data API /trades : réponse inattendue pour {m} : {str(r)[:200]}")
+            raise RuntimeError(f"trade-history API /trades: unexpected response for {m}: {str(r)[:200]}")
         for x in r:
             blk[x["transactionHash"].lower()] = x["timestamp"] * 1000
     pairs = np.array(sorted((live[h], blk[h]) for h in live if h in blk), dtype=np.int64)

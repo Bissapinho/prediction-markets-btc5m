@@ -1,4 +1,4 @@
-"""Sections ML de la recherche d'edges : clusters de marchés (E6) et classifieur de rebonds (E8)."""
+"""ML sections of the price-path strategies: market clusters (E6, A3) and dip-rebound classifier (E8, A4)."""
 
 from __future__ import annotations
 
@@ -21,19 +21,19 @@ def _market_features(x: X):
     rv = np.sqrt((r5**2).mean(1) / 5)
     hour = (D["start_s"] % 86400) / 3600
     F = {
-        "vol_prix": np.nanstd(dp5, 1), "croisements_50": cross.astype(float), "t_decisif": t_decisive,
+        "price_vol": np.nanstd(dp5, 1), "crossings_50": cross.astype(float), "t_decisive": t_decisive,
         "log_volume_usd": np.log1p(usd), "trades": D["n_trades"].sum(1).astype(float),
-        "taille_moy_usd": usd / np.maximum(D["n_trades"].sum(1), 1), "spread_moy": np.nanmean(np.where((D["ask_up"] + D["ask_dn"] - 1) > -.5, D["ask_up"] + D["ask_dn"] - 1, np.nan), 1),
+        "mean_size_usd": usd / np.maximum(D["n_trades"].sum(1), 1), "mean_spread": np.nanmean(np.where((D["ask_up"] + D["ask_dn"] - 1) > -.5, D["ask_up"] + D["ask_dn"] - 1, np.nan), 1),
         "vol_btc_sigma": np.log(np.maximum(rv / D["sigma"], 1e-3)), "log_sigma": np.log(np.maximum(D["sigma"], 1e-7)),
-        "mouvement_btc": np.abs(D["m"][:, -1]) / (D["sigma"] * np.sqrt(300)), "residu_sd": np.nanstd(c.e[:, 10:290], 1),
-        "heure_sin": np.sin(2 * np.pi * hour / 24), "heure_cos": np.cos(2 * np.pi * hour / 24),
+        "btc_move": np.abs(D["m"][:, -1]) / (D["sigma"] * np.sqrt(300)), "resid_sd": np.nanstd(c.e[:, 10:290], 1),
+        "hour_sin": np.sin(2 * np.pi * hour / 24), "hour_cos": np.cos(2 * np.pi * hour / 24),
     }
     names = list(F)
     return np.column_stack([F[k] for k in names]), names
 
 
 def E6(x: X) -> dict:
-    """Clusters de marchés (k-means) et composantes principales des trajectoires de prix."""
+    """Market clusters (k-means) and principal components of the price paths."""
     from sklearn.cluster import KMeans
     from sklearn.decomposition import PCA
     from sklearn.metrics import silhouette_score
@@ -53,7 +53,7 @@ def E6(x: X) -> dict:
     k_use = max(k_best, 4)
     km = KMeans(k_use, n_init=20, random_state=0).fit(Z[ok & c.train])
     lab = km.predict(Z)
-    # P&L du dip 0,30/0,33 par cluster
+    # P&L of the 0.30 / 0.33 dip-buy per cluster
     clusters = []
     for k in range(k_use):
         row = {"cluster": k, "share": float(((lab == k) & ok).mean() / ok.mean())}
@@ -63,9 +63,9 @@ def E6(x: X) -> dict:
             dp, dm = _dip_sim(x, s, 0.30, 0.03, 0, 240)
             row[name] = {"n": int(s.sum()),
                          "dip_30_33": float(dp.mean()) if len(dp) else None, "dip_30_33_boot": mboot(dp, dm, start_s=x.start_s),
-                         "favori_240_gagne": float(((D["pm"][s, 240] >= .5) == c.y[s].astype(bool)).mean())}
+                         "favourite_240_wins": float(((D["pm"][s, 240] >= .5) == c.y[s].astype(bool)).mean())}
         clusters.append(row)
-    # stabilité : la part de chaque cluster sur le test
+    # stability: the share of each cluster on the test period
     pca = PCA(6).fit(np.nan_to_num(D["pm"][ok & c.train][:, 0:300:10]))
     comps = pca.components_
     res = {"silhouette": sil, "k": k_use, "features": names, "clusters": clusters,
@@ -74,7 +74,7 @@ def E6(x: X) -> dict:
 
 
 def E8(x: X) -> dict:
-    """Peut-on prédire quels creux (achat limite à 0,30) rebondissent jusqu'à 0,33 ?"""
+    """Can we predict which dips (limit buy at 0.30) rebound to 0.33?"""
     from sklearn.ensemble import HistGradientBoostingClassifier
 
     c = x.c; D = c.D
@@ -96,14 +96,14 @@ def E8(x: X) -> dict:
                          sign * (D["pm"][i, t] - D["pm"][i, max(t - 10, 0)]), D["n_trades"][i, max(t - 10, 0):t + 1].sum()])
             yv.append(ex); pnl.append(0.03 if ex else yy - 0.30); mk.append(i)
     Xf = np.array(rows); yv = np.array(yv); pnl = np.array(pnl); mk = np.array(mk)
-    names = ["t", "ecart_modele", "btc_5s", "residu", "flux_10s", "log_sigma", "dp_10s", "trades_10s"]
+    names = ["t", "model_gap", "btc_5s", "resid", "flow_10s", "log_sigma", "dp_10s", "trades_10s"]
     tr = c.train[mk]; te = c.test[mk]
     clf = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.05, min_samples_leaf=100, random_state=0).fit(Xf[tr], yv[tr])
     pr_tr = clf.predict_proba(Xf[tr])[:, 1]; pr_te = clf.predict_proba(Xf[te])[:, 1]
     from sklearn.metrics import roc_auc_score
     res = {"n_train": int(tr.sum()), "n_test": int(te.sum()), "auc_test": float(roc_auc_score(yv[te], pr_te)),
            "base_rebound_test": float(yv[te].mean()), "base_pnl_test": mboot(pnl[te], mk[te], 500, start_s=x.start_s)}
-    # seuil choisi sur l'exploration : le quantile de proba prédite qui maximise le P&L moyen (≥ 200 trades)
+    # threshold chosen on the exploration period: the quantile of predicted probability that maximises the mean P&L (≥ 200 trades)
     best = None
     for qq in np.arange(0.5, 0.96, 0.05):
         thr = np.quantile(pr_tr, qq); sel = pr_tr >= thr
@@ -112,6 +112,6 @@ def E8(x: X) -> dict:
     sel_te = pr_te >= best[2]
     res["selected_quantile"] = float(best[0]); res["train_pnl_selected"] = float(best[1])
     res["test_selected"] = mboot(pnl[te][sel_te], mk[te][sel_te], 500, start_s=x.start_s)
-    # rebond attendu par la martingale pour ce sous-ensemble : prix de touche / 0,33 (≈ 0,26 / 0,33)
+    # rebound expected under a martingale for this subset: touch price / 0.33 (≈ 0.26 / 0.33)
     res["features"] = names
     return res

@@ -8,7 +8,7 @@
   "last_day": "2026-10-17",
   "bootstrap": 2000,
   "align_delta_s": 2,
-  "runtime_s": 89.4
+  "runtime_s": 71.0
  },
  "descriptive": {
   "p_up_base_rate": {
@@ -2852,42 +2852,42 @@
  },
  "H2": {
   "scores": {
-   "train|debut (10-90 s)": {
+   "train|early (10-90 s)": {
     "brier_market": 0.20789109494792102,
     "brier_model": 0.21032201308985818,
     "logloss_market": 0.6018545940491591,
     "logloss_model": 0.6099279267286083,
     "n": 87991
    },
-   "train|milieu (100-230 s)": {
+   "train|middle (100-230 s)": {
     "brier_market": 0.12883796598593836,
     "brier_model": 0.13266372870757567,
     "logloss_market": 0.3989074932371515,
     "logloss_model": 0.4147449487255202,
     "n": 136937
    },
-   "train|fin (240-290 s)": {
+   "train|late (240-290 s)": {
     "brier_market": 0.02294014551195148,
     "brier_model": 0.030508591153431366,
     "logloss_market": 0.08326936917385527,
     "logloss_model": 0.10203618783763165,
     "n": 58697
    },
-   "test|debut (10-90 s)": {
+   "test|early (10-90 s)": {
     "brier_market": 0.20366647508065275,
     "brier_model": 0.20808073510482433,
     "logloss_market": 0.5915914809269304,
     "logloss_model": 0.6026456507504949,
     "n": 69975
    },
-   "test|milieu (100-230 s)": {
+   "test|middle (100-230 s)": {
     "brier_market": 0.1228735476091833,
     "brier_model": 0.12926527232496884,
     "logloss_market": 0.38189771491775404,
     "logloss_model": 0.40314589555416414,
     "n": 108850
    },
-   "test|fin (240-290 s)": {
+   "test|late (240-290 s)": {
     "brier_market": 0.021024936381913724,
     "brier_model": 0.030310223712175004,
     "logloss_market": 0.07723644593637592,
@@ -2896,7 +2896,7 @@
    }
   },
   "calibration": {
-   "debut (10-90 s)": {
+   "early (10-90 s)": {
     "market": [
      {
       "bin": 0,
@@ -3022,7 +3022,7 @@
      }
     ]
    },
-   "milieu (100-230 s)": {
+   "middle (100-230 s)": {
     "market": [
      {
       "bin": 0,
@@ -3148,7 +3148,7 @@
      }
     ]
    },
-   "fin (240-290 s)": {
+   "late (240-290 s)": {
     "market": [
      {
       "bin": 0,

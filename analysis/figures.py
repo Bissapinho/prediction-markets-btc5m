@@ -27,8 +27,8 @@ def J(name):
 
 def calibration():
     cal = J("results_delta2")["H2"]["calibration"]
-    snaps = {"debut (10-90 s)": 9, "milieu (100-230 s)": 14, "fin (240-290 s)": 6}
-    titles = {"debut (10-90 s)": "t = 10-90 s", "milieu (100-230 s)": "t = 100-230 s", "fin (240-290 s)": "t = 240-290 s"}
+    snaps = {"early (10-90 s)": 9, "middle (100-230 s)": 14, "late (240-290 s)": 6}
+    titles = {"early (10-90 s)": "t = 10-90 s", "middle (100-230 s)": "t = 100-230 s", "late (240-290 s)": "t = 240-290 s"}
     fig, axes = plt.subplots(1, 3, figsize=(11, 3.8), sharey=True)
     for ax, (g, d) in zip(axes, cal.items()):
         ax.plot([0, 1], [0, 1], color=INK, lw=0.8, ls="--")

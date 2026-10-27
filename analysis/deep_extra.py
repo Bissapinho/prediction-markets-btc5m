@@ -1,4 +1,4 @@
-"""Contrôles complémentaires de la section A/C : séries d'ouverture contre outcomes réels, flux -> outcome empilé.
+"""Additional checks of section A/C: opening streaks against realised outcomes (A9), flow -> outcome stacked.
 
 Sortie : results/deep_C_extra.json. Usage : python -m analysis.deep_extra
 """
@@ -32,7 +32,7 @@ for name,msk in c.splits():
     out[name]=r
     print(name, {k:(v["n"], round(v["pm_open"]["est"],4), round(v["model_open"]["est"],4), round(v["y"]["est"],4), (round(v["pm_minus_y"]["est"],4),round(v["pm_minus_y"]["lo"],4),round(v["pm_minus_y"]["hi"],4))) for k,v in r.items() if k!="logit_y_on_price_and_streak"})
     print("  logit", np.round(beta,3), np.round(np.quantile(draws,.025,0),3), np.round(np.quantile(draws,.975,0),3))
-# flux -> outcome empilé
+# flow -> outcome, stacked on the price
 flow=D["flow_usd"]/1000
 for name,msk in c.splits():
     ts=np.arange(30,271,30); rows=[]

@@ -9,25 +9,25 @@ gamma:
   base_url: https://gamma-api.polymarket.com
   series_id: 10684            # btc-up-or-down-5m (docs/data_notes.md)
   slug_template: "{asset}-updown-{duration}-{start_ts}"
-  window_hours: 6             # 73 events par fenêtre, < limite de page (100)
-  page_limit: 100             # max accepté par /events
-  settle_margin_s: 600        # un marché est considéré résolu 10 min après sa fin
+  window_hours: 6             # 73 events per window, below the page limit (100)
+  page_limit: 100             # maximum accepted by /events
+  settle_margin_s: 600        # a market is treated as resolved 10 min after its end
   rate_per_s: 4
   timeout_s: 30
   max_retries: 6
 
 data_api:
   base_url: https://data-api.polymarket.com
-  page_limit: 10000           # 1 requête par marché en mode taker (docs/data_notes.md)
+  page_limit: 10000           # 1 request per market in taker mode (docs/data_notes.md)
   concurrency: 12
-  rate_per_s: 15              # ~20 req/s mesurés sans 429
+  rate_per_s: 15              # ~20 req/s measured without a 429
   timeout_s: 60
   max_retries: 6
 
 binance:
   base_url: https://data.binance.vision
   symbol: BTCUSDT
-  margin_days: 1              # jours de marge de chaque côté de la période des marchés
+  margin_days: 1              # margin days on each side of the market period
   concurrency: 4
   timeout_s: 120
   max_retries: 6

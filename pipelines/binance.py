@@ -1,12 +1,12 @@
-"""Pipeline `binance` (spec 3.3, S5) : aggTrades BTCUSDT spot journaliers de data.binance.vision.
+"""Pipeline `binance`: daily BTCUSDT spot aggTrades from data.binance.vision.
 
-- raw   : `raw/binance/aggtrades/date=YYYY-MM-DD/BTCUSDT-aggTrades-YYYY-MM-DD.zip` (archive d'origine, checksum vérifié)
-- clean : `clean/btc_aggtrades/date=YYYY-MM-DD/aggtrades.parquet`
-- manifeste : un statut par jour : ok, not_available (pas encore publié), checksum_error, error
+- raw:      `raw/binance/aggtrades/date=YYYY-MM-DD/BTCUSDT-aggTrades-YYYY-MM-DD.zip` (original archive, checksum verified)
+- clean:    `clean/btc_aggtrades/date=YYYY-MM-DD/aggtrades.parquet`
+- manifest: one status per day: ok, not_available (not published yet), checksum_error, error
 
-Format (vérifié le 2026-10-18) : CSV sans en-tête, timestamps en microsecondes,
-colonnes agg_id, price, qty, first_trade_id, last_trade_id, transact_time, is_buyer_maker, is_best_match.
-Le fichier d'un jour est publié le lendemain.
+Format (checked on 2026-10-18): CSV without header, timestamps in microseconds,
+columns agg_id, price, qty, first_trade_id, last_trade_id, transact_time, is_buyer_maker, is_best_match.
+The file of a day is published the next day.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ CSV_SCHEMA = {
 
 
 def period_from_markets(cfg: Config, layout: Layout) -> tuple[date, date]:
-    """Jours couvrant tous les marchés, plus `margin_days` de chaque côté, bornés à hier (UTC)."""
+    """Days covering all markets, plus `margin_days` on each side, capped at yesterday (UTC)."""
     mk = pl.read_parquet(layout.clean("markets", "markets.parquet"), columns=["start_ts_ms", "end_ts_ms"])
     lo = datetime.fromtimestamp(mk["start_ts_ms"].min() / 1000, tz=timezone.utc).date()
     hi = datetime.fromtimestamp(mk["end_ts_ms"].max() / 1000, tz=timezone.utc).date()
@@ -49,10 +49,10 @@ def period_from_markets(cfg: Config, layout: Layout) -> tuple[date, date]:
 
 
 def parse_aggtrades_csv(data: bytes) -> pl.DataFrame:
-    """CSV aggTrades -> DataFrame typé, avec ts_ms (UTC). Accepte un en-tête et des timestamps en ms ou en µs."""
+    """aggTrades CSV -> typed DataFrame with ts_ms (UTC). Accepts a header and timestamps in ms or µs."""
     has_header = not data[:1].isdigit()
     df = pl.read_csv(io.BytesIO(data), has_header=has_header, new_columns=CSV_COLUMNS, schema_overrides=CSV_SCHEMA)
-    # Binance spot est passé aux microsecondes en 2025 ; les anciens fichiers sont en ms.
+    # Binance spot moved to microseconds in 2025; older files are in ms.
     unit_us = df["transact_time"].max() > 10**14
     ts_ms = (pl.col("transact_time") // 1000) if unit_us else pl.col("transact_time")
     return df.select(

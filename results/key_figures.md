@@ -1,3 +1,5 @@
+# Key figures
+
 ## Data
 
 | Figure | Value | Source |
@@ -120,3 +122,86 @@
 | A11, re-alignment −3 s, Binance horizon t + 2 to t + 12 s | 0.092, day CI [0.086, 0.097], market CI [0.088, 0.096], n = 7,766 | results/a11_robustness.json |
 | A11, re-alignment none (block time), Binance horizon t + 0 to t + 10 s | 0.024, day CI [0.015, 0.035], market CI [0.021, 0.028], n = 7,766 | results/a11_robustness.json |
 | A11, re-alignment none (block time), Binance horizon t + 2 to t + 12 s | 0.027, day CI [0.018, 0.036], market CI [0.023, 0.031], n = 7,766 | results/a11_robustness.json |
+
+## Protocol constants
+
+| Figure | Value | Source |
+|---|---|---|
+| Five-minute window, markets per UTC day | 300 s, 288 markets | config.yaml (duration), analysis/data.py (T) |
+| Resolution TWAP / pre-market volatility window | 60-second TWAP; 30-minute realised volatility (σ), 1,800 s | analysis/run.py (L_TWAP, sigma_pre) |
+| Bootstrap draws: P&L by market (H1-H4) / blocks (day, hour) | 2,000 / 2,000 | analysis/run.py (B), analysis/blockboot.py (B) |
+| Bootstrap draws: H1 regression and H2 logit / A9 logit | 500 / 300 | analysis/run.py, analysis/deep_extra.py |
+| Benjamini-Hochberg level | q = 0.05 | analysis/summary.py (Q) |
+| Minimum trades on train for a strategy threshold | 200 | analysis/run.py (main) |
+| Validation days for early stopping and stacking | last 5 days of train | analysis/deep_cd.py, analysis/deep_stack.py |
+| Taker fee | 0.07 · p · (1 − p) per share: 1.75 c at 50 c, 0.33 c at 95 c | analysis/run.py (fee), docs/data_notes.md |
+| Execution latency L | 2 s (H1-H4), 1 s (A family); grid 0, 1, 2, 3, 5 s | analysis/run.py, analysis/edges.py |
+| Ask validity / bin of the timestamp histogram | 3 s / 0.25 s | analysis/data.py (ASK_MAX_AGE), analysis/timestamp_lag.py |
+| Selected thresholds on train | H1 z0 = 4 σ in 3 s; H2 θ = 5 c; H3 jump 8 c in 5 s; H4 t = 260 s, ask 0.80-0.98 | results/results_delta2.json (strategies) |
+| A1 / A7 thresholds | buy ≤ 30 c, sell ≥ 33 c / ask ≤ 99 c, model > 99.5 % | analysis/edges.py |
+| A2 grid / A4 test AUC | 216 cells / 0.59 | results/edges_E2.json, results/edges_E8.json |
+| ML features / snapshots | 28 features; t = 30, 60, ..., 270 s | analysis/deep_cd.py (_features, SNAPS) |
+| ML models | logistic regression C = 1; MLP (64, 32); GRU hidden size 32 on the last 30 s of 6 channels | analysis/deep_cd.py |
+| Calibration snapshots | every 10 s | analysis/run.py (H2) |
+| On-chain check of the trade history | 9,018 / 9,018 trades on 4 markets | docs/data_notes.md |
+| Venue outage (no trade, markets dropped by the trade filter) | 2026-09-19 | docs/data_notes.md |
+| A11 Binance horizons | t to t + 10 s; t + 2 to t + 12 s | analysis/a11_robustness.py (HORIZONS) |
+
+# Full tables (copies of results/hypotheses.md, ml.md, latency.md)
+
+### Tests (Benjamini-Hochberg within each family)
+
+| ID | Hypothesis | Execution | Statistic (test) | Estimate | n | 95 % CI (day) | p (day) | p adj. (day) | 95 % CI (market) | p adj. (market) | p adj. (hour) | Family | Verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| H1 | Lead-lag: buy when Binance moves >= z0 sigma in 3 s and the market has not moved | taker, 2 s | mean P&L per share, fees included | +1.0 c | 2,570 | [-0.1, +2.1] | 0.034 | 0.086 | [-0.1, +2.2] | 0.111 | 0.104 | P (protocol) | Not significant after BH |
+| H2 | TWAP fair value from Binance: buy the side priced below the model | taker, 2 s | mean P&L per share, fees included | -2.7 c | 6,821 | [-3.9, -1.6] | 1.000 | 1.000 | [-3.8, -1.7] | 1.000 | 1.000 | P (protocol) | Rejected: negative P&L |
+| H2-info | Model minus market predicts the outcome (logit coefficient c > 0) | – | coefficient c | 0.124 | 69,975 | [0.031, 0.215] | 0.004 | 0.020 | [0.055, 0.195] | 0.010 | 0.020 | P (protocol) | Information detected after BH; the taker strategy built on it (H2) loses |
+| H3 | Fade price jumps that Binance does not justify | taker, 2 s | mean P&L per share, fees included | -2.2 c | 6,974 | [-3.3, -1.2] | 1.000 | 1.000 | [-3.3, -1.1] | 1.000 | 1.000 | P (protocol) | Rejected: negative P&L |
+| H4 | Late favourites (t = 240-290 s, ask 0.80-0.98) | taker, 2 s | mean P&L per share, fees included | -0.4 c | 1,313 | [-1.6, +0.7] | 0.782 | 1.000 | [-1.9, +0.9] | 1.000 | 1.000 | P (protocol) | Rejected: negative P&L |
+| A1 | Dip-buy: buy a side below 30 c, sell at 33 c | taker, 1 s | mean P&L per share, fees included | -6.0 c | 4,614 | [-6.6, -5.4] | 1.000 | 1.000 | [-6.5, -5.4] | 1.000 | 1.000 | A (price paths) | Rejected: negative P&L |
+| A2 | Dip-buy grid (216 cells), best cell on train | limit order | mean P&L per share, fees included | -1.0 c | 870 | [-1.1, -0.8] | 1.000 | 1.000 | [-1.1, -0.8] | 1.000 | 1.000 | A (price paths) | Rejected: negative P&L |
+| A4 | ML classifier picks the dips that rebound (test AUC 0.59) | limit order | mean P&L per share, fees included | -1.4 c | 466 | [-2.5, -0.4] | 0.996 | 1.000 | [-2.5, -0.4] | 1.000 | 1.000 | A (price paths) | Rejected: negative P&L |
+| A5 | Pre-open momentum: buy the side of the last 1-min Binance trend | taker, 1 s | mean P&L per share, fees included | -3.6 c | 5,393 | [-4.7, -2.5] | 1.000 | 1.000 | [-5.0, -2.3] | 1.000 | 1.000 | A (price paths) | Rejected: negative P&L |
+| A6 | TWAP anchor at the open: buy model minus opening price | taker, 1 s | mean P&L per share, fees included | -3.0 c | 1,541 | [-5.8, -0.3] | 0.989 | 1.000 | [-5.2, -0.3] | 1.000 | 1.000 | A (price paths) | Rejected: negative P&L |
+| A7 | End-of-window sniping: buy at <= 99 c a side the model gives > 99.5 % | taker, 1 s | mean P&L per share, fees included | -0.8 c | 23 | [-13.1, +5.7] | 0.547 | 1.000 | [-10.7, +5.8] | 1.000 | 1.000 | A (price paths) | Rejected: negative P&L |
+| A8 | Pair arbitrage (Up + Down < 1 $) | – | share of seconds with ask_up + ask_dn < 1 | 52% | 919,083 | – | – | – | – | – | – | – | Artefact: the two prices come from different instants of the same second |
+| A9 | Under-reaction at the open: slope of outcome on logit(price), 10-40 s (H0: slope = 1) | – | logit slope | 1.223 | 7,766 | [1.158, 1.290] | < 0.001 | < 0.001 | [1.150, 1.304] | < 0.001 | < 0.001 | I (information) | Information detected after BH (statistical test, not a P&L test) |
+| A10 | ML forecast of the outcome stacked on the market price | – | log-loss gain vs market (nats) | 0.0008 | 69,894 | [0.0001, 0.0016] | 0.014 | 0.014 | [0.0001, 0.0016] | 0.018 | 0.028 | I (information) | Information detected after BH (statistical test, not a P&L test) |
+| A11 | Price residual (not explained by Binance) leads the next 10 s Binance move | – | mean per-market correlation | 0.082 | 7,766 | [0.076, 0.088] | < 0.001 | < 0.001 | [0.079, 0.086] | < 0.001 | < 0.001 | I (information) | Information detected after BH (statistical test, not a P&L test) |
+
+### Ex-post diagnostics (not in any BH family; p adj. is not computed)
+
+| ID | Hypothesis | Execution | Statistic (test) | Estimate | n | 95 % CI (day) | p (day) | p adj. (day) | 95 % CI (market) | p adj. (market) | p adj. (hour) | Family | Verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A3 | Dip-buy restricted to the 'hesitant' market cluster (cluster defined from the whole price path) | limit order | mean P&L per share, fees included | +1.9 c | 2,236 | [+1.7, +2.2] | < 0.001 | – | [+1.7, +2.2] | – | – | ex-post diagnostic | Ex-post diagnostic: the cluster uses the whole price path (look-ahead), so this is not a tradable strategy; not in any BH family |
+
+### ML and DL models
+
+| Model | Setting | Log-loss (model) | Log-loss (market) | Gain (nats) | 95 % CI (day) | p adj. (day) | 95 % CI (market) | p adj. (market) | p adj. (hour) |
+|---|---|---|---|---|---|---|---|---|---|
+| Logistic regression | standalone | 0.3864 | 0.3883 | +0.0019 | [+0.0011, +0.0027] | < 0.001 | [+0.0012, +0.0027] | < 0.001 | < 0.001 |
+| Gradient boosting (HistGB) | standalone | 0.3997 | 0.3883 | -0.0114 | [-0.0144, -0.0085] | 1.000 | [-0.0146, -0.0084] | 1.000 | 1.000 |
+| MLP (64, 32) | standalone | 0.3909 | 0.3883 | -0.0026 | [-0.0045, -0.0008] | 1.000 | [-0.0042, -0.0012] | 1.000 | 1.000 |
+| Market price, recalibrated (logistic on logit p) | standalone | 0.3878 | 0.3883 | +0.0005 | [+0.0002, +0.0008] | 0.001 | [+0.0002, +0.0008] | 0.009 | 0.008 |
+| GRU (30 s sequences + static features) | standalone | 0.3883 | 0.3885 | +0.0002 | [-0.0014, +0.0017] | 0.670 | [-0.0010, +0.0013] | 0.630 | 0.639 |
+| Logistic regression | stacked on market price | 0.3874 | 0.3883 | +0.0008 | [+0.0001, +0.0016] | 0.039 | [+0.0001, +0.0016] | 0.047 | 0.075 |
+| Gradient boosting (HistGB) | stacked on market price | 0.3898 | 0.3883 | -0.0016 | [-0.0028, -0.0003] | 1.000 | [-0.0029, -0.0004] | 1.000 | 1.000 |
+| MLP (64, 32) | stacked on market price | 0.3881 | 0.3883 | +0.0002 | [-0.0006, +0.0009] | 0.616 | [-0.0006, +0.0010] | 0.630 | 0.639 |
+
+### Lead-lag strategy by re-alignment and latency
+
+### 95 % CI, bootstrap by UTC day (reference)
+
+| Re-alignment | L = 0 s | L = 1 s | L = 2 s | L = 3 s | L = 5 s |
+|---|---|---|---|---|---|
+| none (block time) | +16.3 [+14.7, +17.8] | +13.0 [+11.4, +14.5] | +7.6 [+5.9, +9.1] | +1.1 [-0.5, +2.5] | -1.7 [-3.2, -0.3] |
+| −2 s (reference) | +12.6 [+11.4, +13.8] | +3.8 [+2.6, +4.9] | +1.0 [-0.1, +2.1] | +0.5 [-0.6, +1.7] | +0.6 [-0.6, +1.8] |
+| −3 s | +3.1 [+1.8, +4.5] | -0.6 [-1.8, +0.7] | -1.1 [-2.2, +0.1] | -1.3 [-2.6, +0.0] | -1.5 [-3.0, -0.0] |
+
+### 95 % CI, bootstrap by market
+
+| Re-alignment | L = 0 s | L = 1 s | L = 2 s | L = 3 s | L = 5 s |
+|---|---|---|---|---|---|
+| none (block time) | +16.3 [+14.8, +17.9] | +13.0 [+11.5, +14.6] | +7.6 [+6.1, +9.1] | +1.1 [-0.3, +2.5] | -1.7 [-3.1, -0.3] |
+| −2 s (reference) | +12.6 [+11.2, +13.9] | +3.8 [+2.6, +5.1] | +1.0 [-0.2, +2.2] | +0.5 [-0.7, +1.8] | +0.6 [-0.8, +1.9] |
+| −3 s | +3.1 [+1.6, +4.6] | -0.6 [-2.0, +0.8] | -1.1 [-2.4, +0.3] | -1.3 [-2.8, +0.1] | -1.5 [-3.1, +0.0] |
