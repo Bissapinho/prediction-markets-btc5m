@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 from scipy.special import ndtri
 
+from analysis import blockboot as bb
 from analysis.deep_data import load_cache
 
 OUT = Path("results")
@@ -38,14 +39,21 @@ def nan_corr(a, b):
     return float(np.corrcoef(a[o], b[o])[0, 1]) if o.sum() > 10 else None
 
 
-def boot_stat(per_market: np.ndarray, fn=np.nanmean, b: int = 1000) -> dict:
-    """Statistique sur des valeurs par marché + IC bootstrap (marchés rééchantillonnés)."""
+def boot_stat(per_market: np.ndarray, fn=np.nanmean, b: int = 1000, start_s=None) -> dict:
+    """Statistic of per-market values + bootstrap CI (markets resampled).
+
+    With start_s (market start of each value) and fn = mean, also adds block bootstraps by UTC day and UTC hour.
+    """
     x = np.asarray(per_market, dtype=float)
-    x = x[np.isfinite(x)]
+    fin = np.isfinite(x)
+    x = x[fin]
     if len(x) < 5:
         return {"est": None, "lo": None, "hi": None, "n": int(len(x))}
     bs = np.array([fn(x[RNG.integers(0, len(x), len(x))]) for _ in range(b)])
-    return {"est": float(fn(x)), "lo": float(np.quantile(bs, .025)), "hi": float(np.quantile(bs, .975)), "n": int(len(x))}
+    out = {"est": float(fn(x)), "lo": float(np.quantile(bs, .025)), "hi": float(np.quantile(bs, .975)), "n": int(len(x))}
+    if start_s is not None:
+        out.update(bb.blocks_mean(x, np.asarray(start_s)[fin]))
+    return out
 
 
 def boot_ratio(num: np.ndarray, den: np.ndarray, b: int = 1000) -> dict:
@@ -180,7 +188,7 @@ def section_A(c: Ctx) -> dict:
         for k in (2, 5, 10, 20, 30):
             fut = m[msk][:, 20 + k:200 + k] - m[msk][:, 20:200]
             per = np.array([nan_corr(de[i], fut[i]) if np.isfinite(de[i]).sum() > 20 else np.nan for i in range(de.shape[0])])
-            row[str(k)] = {"pooled": nan_corr(de, fut), "mean_per_market": boot_stat(per)}
+            row[str(k)] = {"pooled": nan_corr(de, fut), "mean_per_market": boot_stat(per, start_s=D["start_s"][msk])}
         row["placebo_past_10"] = nan_corr(de, m[msk][:, 20:200] - m[msk][:, 10:190])
         lead[name] = row
     res["resid_leads_btc"] = lead

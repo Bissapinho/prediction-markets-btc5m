@@ -45,7 +45,7 @@ def main() -> None:
             return np.column_stack([logit(p, 0.005), logit(mdl.predict_proba(A)[:, 1], 0.005)])
         st = LogisticRegression(max_iter=1000).fit(stack_X(Av, pv), yv)
         p = st.predict_proba(stack_X(At, pt))[:, 1]
-        r = _compare(p, pt, yt, gt)
+        r = _compare(p, pt, yt, gt, start_s=c.D["start_s"][gt])
         r["stack_weights"] = st.coef_[0].tolist()
         r["by_t"] = [{"t": int(t), **{k: v for k, v in _compare(p[tt == t], pt[tt == t], yt[tt == t], gt[tt == t], b=300).items()
                                        if k in ("gain", "lo", "hi")}} for t in SNAPS]

@@ -45,6 +45,8 @@ step $PY -m analysis.deep AB
 step $PY -m analysis.deep D
 step $PY -m analysis.deep_stack
 step $PY -m analysis.deep_extra
+# A11 robustness: re-alignment 0 / -2 / -3 s, Binance horizon [t, t+10] or [t+2, t+12], block bootstraps.
+step $PY -m analysis.a11_robustness
 # A1-A8: price-path strategies.
 step $PY -m analysis.edges_data
 step $PY -m analysis.edges E1 E2 E3 E4 E6 E8

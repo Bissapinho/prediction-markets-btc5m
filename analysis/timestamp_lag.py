@@ -3,7 +3,7 @@
 Les paires (heure d'exécution, heure du bloc) sont extraites une fois d'une capture WebSocket d'une journée
 (data/raw/ws/book, non fournie) et publiées dans data_sample/timestamp_lag_pairs.csv, sans hash ni wallet.
 Sans capture locale, le script repart de ce CSV. Sortie : results/timestamp_lag.json.
-Usage : python -m analysis.timestamp_lag
+Usage : python -m analysis.timestamp_lag [--extract]
 """
 
 import csv
@@ -54,8 +54,9 @@ def extract_pairs() -> np.ndarray:
     return pairs
 
 
-def main() -> None:
-    if glob.glob("data/raw/ws/book/*/*/*.zst"):
+def main(extract: bool = False) -> None:
+    # The published numbers come from the CSV; re-extracting needs the live capture and network access.
+    if extract and glob.glob("data/raw/ws/book/*/*/*.zst"):
         pairs = extract_pairs()
     else:
         pairs = np.loadtxt(PAIRS, delimiter=",", skiprows=1, dtype=np.int64)
@@ -71,4 +72,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    main("--extract" in sys.argv[1:])

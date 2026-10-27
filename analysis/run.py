@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 from scipy.special import ndtr  # Φ
 
+from analysis import blockboot as bb
 from analysis.data import T, T_EXT, Data, load
 from pipelines.common.storage import Layout
 
@@ -105,13 +106,14 @@ def irls(X, y, w=None, iters=25):
     return beta
 
 
-def cluster_boot_logit(X, y, cluster, b=500):
-    """Bootstrap par marché : rééchantillonne les marchés, refait la régression."""
+def cluster_boot_logit(X, y, cluster, b=500, rng=None):
+    """Cluster bootstrap of a logit: resamples the clusters (markets, days or hours) and refits the regression."""
+    rng = RNG if rng is None else rng
     uniq, inv = np.unique(cluster, return_inverse=True)
     beta = irls(X, y)
     draws = []
     for _ in range(b):
-        w = np.bincount(RNG.integers(0, len(uniq), len(uniq)), minlength=len(uniq))[inv].astype(float)
+        w = np.bincount(rng.integers(0, len(uniq), len(uniq)), minlength=len(uniq))[inv].astype(float)
         draws.append(irls(X, y, w))
     draws = np.array(draws)
     return beta, draws
@@ -212,8 +214,11 @@ GRIDS = {"S1": [2, 3, 4, 5], "S2": [0.01, 0.02, 0.03, 0.05, 0.08, 0.12], "S3": [
          "S4": [240, 260, 270, 280, 290], "REF": [0]}
 
 
-def summarize_trades(r: dict) -> dict:
+def summarize_trades(r: dict, d: Data | None = None) -> dict:
+    """Bootstrap by market; with `d`, also block bootstraps by UTC day and UTC hour (keys "day", "hour")."""
     out = boot_mean(r["pnl"])
+    if d is not None and len(r["pnl"]):
+        out.update(bb.blocks_mean(r["pnl"], d.start_s[r["market"]]))
     if len(r["pnl"]):
         out.update(hit=float((r["pnl"] > 0).mean()), avg_price=float(r["price"].mean()),
                    avg_fee=float(fee(r["price"]).mean()), share_up=float((r["side"] > 0).mean()),
@@ -323,6 +328,12 @@ def main(delta: int = 0) -> None:
                                  "c_lo": float(np.quantile(draws[:, 2], 0.025)), "c_hi": float(np.quantile(draws[:, 2], 0.975)),
                                  "b_lo": float(np.quantile(draws[:, 1], 0.025)), "b_hi": float(np.quantile(draws[:, 1], 0.975)),
                                  "p_c": float((np.sum(draws[:, 2] <= 0) + 1) / (len(draws) + 1)), "n_obs": int(len(yy))}
+        if split == "test":
+            for unit in bb.UNITS:
+                _, dr = cluster_boot_logit(X, yy, bb.block_keys(d.start_s[cl], unit), b=500, rng=bb.RNG)
+                h2["pooled_test"][unit] = {"c_lo": float(np.quantile(dr[:, 2], 0.025)), "c_hi": float(np.quantile(dr[:, 2], 0.975)),
+                                           "c_se": float(dr[:, 2].std(ddof=1)), "n_groups": int(len(np.unique(bb.block_keys(d.start_s[cl], unit)))),
+                                           "p_c": float((np.sum(dr[:, 2] <= 0) + 1) / (len(dr) + 1))}
     for t in t2:
         for split, idx in (("train", train), ("test", test)):
             X, yy, _ = h2_design(idx, np.array([t]))
@@ -361,6 +372,17 @@ def main(delta: int = 0) -> None:
                      "cum": cum.tolist(), "cum_lo": np.quantile(cumd, 0.025, 0).tolist(), "cum_hi": np.quantile(cumd, 0.975, 0).tolist(),
                      "share_after_2s": float(beta[after_L].sum() / beta[pos].sum()),
                      "sum_0_10": float(beta[pos].sum())}
+        if split == "test":
+            # Block bootstraps: the per-market sufficient statistics are summed by UTC day (or hour), then the blocks
+            # are resampled.
+            for unit in bb.UNITS:
+                _, g = np.unique(bb.block_keys(d.start_s[idx], unit), return_inverse=True)
+                ng = int(g.max()) + 1
+                XtX_g = np.zeros((ng, len(lags), len(lags))); Xty_g = np.zeros((ng, len(lags)))
+                np.add.at(XtX_g, g, XtX); np.add.at(Xty_g, g, Xty)
+                w = bb.draw_counts(ng, 500)
+                dr = np.array([np.linalg.solve(np.tensordot(wk, XtX_g, 1), wk @ Xty_g) for wk in w])
+                h1[split][unit] = {**bb.ci(dr), "n_groups": ng}
     res["H1"] = h1
 
     # ---------- H4 : calibration par tranche fine en fin de fenêtre (marché vs modèle)
@@ -392,8 +414,8 @@ def main(delta: int = 0) -> None:
         if best is not None:
             st, ss = strategy_signals(name, best["param"], d, P, pm, S, sigma)
             rt = simulate(d, test, st, ss, L=2)
-            entry["test"] = summarize_trades(rt)
-            entry["latency"] = {str(L): summarize_trades(simulate(d, test, st, ss, L=L)) for L in (0, 1, 2, 3, 5)}
+            entry["test"] = summarize_trades(rt, d)
+            entry["latency"] = {str(L): summarize_trades(simulate(d, test, st, ss, L=L), d) for L in (0, 1, 2, 3, 5)}
             # P&L cumulé sur le test (ordre chronologique des marchés) et par semaine.
             order = np.argsort(d.start_s[rt["market"]]) if len(rt["market"]) else []
             entry["test_curve"] = {"day": d.day[rt["market"][order]].tolist() if len(order) else [],
@@ -423,6 +445,13 @@ def main(delta: int = 0) -> None:
         tst = strats[name].get("test")
         pv[name] = tst["p"] if tst and tst["p"] is not None else 1.0
     res["bh"] = bh(pv)
+    # Same family with the block-bootstrap p-values (by UTC day: reference for the verdicts; by UTC hour: sensitivity).
+    for unit in bb.UNITS:
+        pvu = {"H2_c": res["H2"]["pooled_test"][unit]["p_c"]}
+        for name in ("S1", "S2", "S3", "S4"):
+            tst = strats[name].get("test") or {}
+            pvu[name] = tst[unit]["p"] if unit in tst and tst[unit]["p"] is not None else 1.0
+        res[f"bh_{unit}"] = bh(pvu)
     res["meta"]["runtime_s"] = round(time.time() - t_start, 1)
 
     with open(OUT / f"results_delta{delta}.json", "w", encoding="utf-8") as f:

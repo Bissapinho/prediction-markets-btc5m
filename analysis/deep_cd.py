@@ -6,6 +6,7 @@ import time
 
 import numpy as np
 
+from analysis import blockboot as bb
 from analysis.deep import RNG, T, Ctx, boot_stat, cluster_ols, logit, nan_corr
 from analysis.run import irls
 
@@ -60,15 +61,21 @@ def _logloss(p, y):
     return -(y * np.log(p) + (1 - y) * np.log(1 - p))
 
 
-def _compare(p_model, p_mkt, y, groups, b=1000):
-    """Gain de log-loss du modèle sur le marché, IC par bootstrap des marchés."""
+def _compare(p_model, p_mkt, y, groups, b=1000, start_s=None):
+    """Log-loss gain of the model over the market, CI by bootstrap of markets.
+
+    With start_s (market start of each prediction), also adds block bootstraps by UTC day and UTC hour.
+    """
     d = _logloss(p_mkt, y) - _logloss(p_model, y)
     um, inv = np.unique(groups, return_inverse=True)
     s = np.bincount(inv, d); cnt = np.bincount(inv)
     bs = [s[j].sum() / cnt[j].sum() for j in (RNG.integers(0, len(um), len(um)) for _ in range(b))]
-    return {"logloss_model": float(_logloss(p_model, y).mean()), "logloss_market": float(_logloss(p_mkt, y).mean()),
-            "gain": float(d.mean()), "lo": float(np.quantile(bs, .025)), "hi": float(np.quantile(bs, .975)),
-            "brier_model": float(((p_model - y) ** 2).mean()), "brier_market": float(((p_mkt - y) ** 2).mean())}
+    out = {"logloss_model": float(_logloss(p_model, y).mean()), "logloss_market": float(_logloss(p_mkt, y).mean()),
+           "gain": float(d.mean()), "lo": float(np.quantile(bs, .025)), "hi": float(np.quantile(bs, .975)),
+           "brier_model": float(((p_model - y) ** 2).mean()), "brier_market": float(((p_mkt - y) ** 2).mean())}
+    if start_s is not None:
+        out.update(bb.blocks_mean(d, start_s))
+    return out
 
 
 def section_D(c: Ctx) -> dict:
@@ -113,11 +120,12 @@ def section_D(c: Ctx) -> dict:
         mdl.fit(Xtr[o_tr], ytr[o_tr])
         p = mdl.predict_proba(Xte[o_te])[:, 1]
         preds[name] = p
-        d1["models"][name] = _compare(p, pte[o_te], yte[o_te], gte[o_te])
+        d1["models"][name] = _compare(p, pte[o_te], yte[o_te], gte[o_te], start_s=c.D["start_s"][gte[o_te]])
         print(f"  D1 {name} {time.time() - t0:.0f}s gain={d1['models'][name]['gain']:.4f}", flush=True)
     # marché recalibré seul (logistique sur logit(p)) : la référence honnête
     lr = LogisticRegression(max_iter=1000).fit(logit(ptr[o_tr], 0.005)[:, None], ytr[o_tr])
-    d1["models"]["marché recalibré"] = _compare(lr.predict_proba(logit(pte[o_te], 0.005)[:, None])[:, 1], pte[o_te], yte[o_te], gte[o_te])
+    d1["models"]["marché recalibré"] = _compare(lr.predict_proba(logit(pte[o_te], 0.005)[:, None])[:, 1], pte[o_te], yte[o_te], gte[o_te],
+                                                start_s=c.D["start_s"][gte[o_te]])
 
     # GRU sur les séquences de 60 s + features statiques
     Sq = _seq(c)
@@ -164,7 +172,7 @@ def section_D(c: Ctx) -> dict:
     net.load_state_dict(best_state)
     with torch.no_grad():
         p_gru = torch.sigmoid(net(sT, fT)).numpy()
-    d1["models"]["GRU (séquence 30 s)"] = _compare(p_gru, pte, yte, gte)
+    d1["models"]["GRU (séquence 30 s)"] = _compare(p_gru, pte, yte, gte, start_s=c.D["start_s"][gte])
     d1["gru_epochs"] = epoch + 1
     print(f"  D1 GRU {time.time() - t0:.0f}s", flush=True)
 

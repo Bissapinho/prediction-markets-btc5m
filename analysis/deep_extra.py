@@ -3,6 +3,7 @@
 Sortie : results/deep_C_extra.json. Usage : python -m analysis.deep_extra
 """
 import numpy as np, json
+from analysis import blockboot as bb
 from analysis.deep import Ctx, boot_stat, logit, RNG
 from analysis.run import irls, cluster_boot_logit
 c=Ctx(); D=c.D; y=c.y
@@ -21,7 +22,13 @@ for name,msk in c.splits():
     sel=msk&consec&np.isfinite(np.nanmean(D["pm"][:,10:40],1))
     X=np.column_stack([np.ones(sel.sum()), logit(np.nanmean(D["pm"][:,10:40],1)[sel]), (streak[sel]==1).astype(float),(streak[sel]==-1).astype(float)])
     beta,draws=cluster_boot_logit(X,y[sel],np.nonzero(sel)[0],b=300)
-    r["logit_y_on_price_and_streak"]={"beta":beta.tolist(),"lo":np.quantile(draws,.025,0).tolist(),"hi":np.quantile(draws,.975,0).tolist()}
+    r["logit_y_on_price_and_streak"]={"beta":beta.tolist(),"lo":np.quantile(draws,.025,0).tolist(),"hi":np.quantile(draws,.975,0).tolist(),"n":int(sel.sum())}
+    if name=="test":
+        # block bootstraps (UTC day, UTC hour) of the same logit
+        for unit in bb.UNITS:
+            keys=bb.block_keys(st[sel],unit)
+            _,dr=cluster_boot_logit(X,y[sel],keys,b=300,rng=bb.RNG)
+            r["logit_y_on_price_and_streak"][unit]={**bb.ci(dr),"n_groups":int(len(np.unique(keys)))}
     out[name]=r
     print(name, {k:(v["n"], round(v["pm_open"]["est"],4), round(v["model_open"]["est"],4), round(v["y"]["est"],4), (round(v["pm_minus_y"]["est"],4),round(v["pm_minus_y"]["lo"],4),round(v["pm_minus_y"]["hi"],4))) for k,v in r.items() if k!="logit_y_on_price_and_streak"})
     print("  logit", np.round(beta,3), np.round(np.quantile(draws,.025,0),3), np.round(np.quantile(draws,.975,0),3))

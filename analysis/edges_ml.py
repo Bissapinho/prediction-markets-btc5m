@@ -62,7 +62,7 @@ def E6(x: X) -> dict:
             s = msk & ok & (lab == k)
             dp, dm = _dip_sim(x, s, 0.30, 0.03, 0, 240)
             row[name] = {"n": int(s.sum()),
-                         "dip_30_33": float(dp.mean()) if len(dp) else None, "dip_30_33_boot": mboot(dp, dm),
+                         "dip_30_33": float(dp.mean()) if len(dp) else None, "dip_30_33_boot": mboot(dp, dm, start_s=x.start_s),
                          "favori_240_gagne": float(((D["pm"][s, 240] >= .5) == c.y[s].astype(bool)).mean())}
         clusters.append(row)
     # stabilité : la part de chaque cluster sur le test
@@ -102,7 +102,7 @@ def E8(x: X) -> dict:
     pr_tr = clf.predict_proba(Xf[tr])[:, 1]; pr_te = clf.predict_proba(Xf[te])[:, 1]
     from sklearn.metrics import roc_auc_score
     res = {"n_train": int(tr.sum()), "n_test": int(te.sum()), "auc_test": float(roc_auc_score(yv[te], pr_te)),
-           "base_rebound_test": float(yv[te].mean()), "base_pnl_test": mboot(pnl[te], mk[te], 500)}
+           "base_rebound_test": float(yv[te].mean()), "base_pnl_test": mboot(pnl[te], mk[te], 500, start_s=x.start_s)}
     # seuil choisi sur l'exploration : le quantile de proba prédite qui maximise le P&L moyen (≥ 200 trades)
     best = None
     for qq in np.arange(0.5, 0.96, 0.05):
@@ -111,7 +111,7 @@ def E8(x: X) -> dict:
             best = (qq, pnl[tr][sel].mean(), thr)
     sel_te = pr_te >= best[2]
     res["selected_quantile"] = float(best[0]); res["train_pnl_selected"] = float(best[1])
-    res["test_selected"] = mboot(pnl[te][sel_te], mk[te][sel_te], 500)
+    res["test_selected"] = mboot(pnl[te][sel_te], mk[te][sel_te], 500, start_s=x.start_s)
     # rebond attendu par la martingale pour ce sous-ensemble : prix de touche / 0,33 (≈ 0,26 / 0,33)
     res["features"] = names
     return res

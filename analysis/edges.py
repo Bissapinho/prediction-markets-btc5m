@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 from scipy.special import ndtr
 
+from analysis import blockboot as bb
 from analysis.deep import RNG, Ctx, boot_stat, nan_corr
 from analysis.edges_data import S0, load
 
@@ -28,7 +29,7 @@ def fee(p):
     return FEE * p * (1 - p)
 
 
-def mboot(pnl, mk, b=1000):
+def mboot(pnl, mk, b=1000, start_s=None):
     """Moyenne de P&L par trade, IC bootstrap en grappes (marchés)."""
     pnl = np.asarray(pnl, float); mk = np.asarray(mk)
     if len(pnl) < 5:
@@ -36,8 +37,11 @@ def mboot(pnl, mk, b=1000):
     um, inv = np.unique(mk, return_inverse=True)
     s = np.bincount(inv, pnl); c = np.bincount(inv)
     bs = np.array([(s[j].sum() / c[j].sum()) for j in (RNG.integers(0, len(um), len(um)) for _ in range(b))])
-    return {"n": int(len(pnl)), "n_markets": int(len(um)), "mean": float(pnl.mean()), "lo": float(np.quantile(bs, .025)),
-            "hi": float(np.quantile(bs, .975)), "p": float((np.sum(bs <= 0) + 1) / (b + 1)), "hit": float((pnl > 0).mean())}
+    out = {"n": int(len(pnl)), "n_markets": int(len(um)), "mean": float(pnl.mean()), "lo": float(np.quantile(bs, .025)),
+           "hi": float(np.quantile(bs, .975)), "p": float((np.sum(bs <= 0) + 1) / (b + 1)), "hit": float((pnl > 0).mean())}
+    if start_s is not None:
+        out.update(bb.blocks_mean(pnl, start_s[mk]))
+    return out
 
 
 class X:
@@ -45,6 +49,7 @@ class X:
 
     def __init__(self):
         self.c = c = Ctx()
+        self.start_s = c.D["start_s"]     # market start (Unix s), for the block bootstraps
         E = load()
         self.y = c.y
         # Pour chaque côté : sl = prix des trades où le token est VENDU par un taker (un maker l'achète),
@@ -179,11 +184,11 @@ def E2(x: X) -> dict:
     best = max(elig, key=lambda r: r["train"]["mean"])
     e0, e1 = windows[best["window"]]
     p, m = _dip_sim(x, c.test, best["x"], best["k"], e0, e1)
-    res["selected"] = {"window": best["window"], "x": best["x"], "k": best["k"], "train_mean": best["train"]["mean"], "test": mboot(p, m)}
+    res["selected"] = {"window": best["window"], "x": best["x"], "k": best["k"], "train_mean": best["train"]["mean"], "test": mboot(p, m, start_s=x.start_s)}
     # le cas évoqué : 0,30 → 0,33 sur 0-240 s
     for name, msk in c.splits():
         p, m = _dip_sim(x, msk, 0.30, 0.03, 0, 240)
-        res[f"case_30_33_{name}"] = mboot(p, m)
+        res[f"case_30_33_{name}"] = mboot(p, m, start_s=x.start_s)
     # version taker du même cas : achat au premier ask ≤ 0,30 (payé au ask 1 s plus tard), revente au bid ≥ 0,33, frais
     for name, msk in c.splits():
         pnl, mk = [], []
@@ -202,7 +207,7 @@ def E2(x: X) -> dict:
                 else:
                     pnl.append(yy[i] - cost)
                 mk.append(np.nonzero(msk)[0][i])
-        res[f"case_30_33_taker_{name}"] = mboot(np.array(pnl), np.array(mk))
+        res[f"case_30_33_taker_{name}"] = mboot(np.array(pnl), np.array(mk), start_s=x.start_s)
     return res
 
 
@@ -259,7 +264,7 @@ def E3(x: X) -> dict:
                 go_u = np.nan_to_num(eu, nan=-1) > th; go_d = (np.nan_to_num(ed, nan=-1) > th) & ~go_u
                 pnl = np.concatenate([(c.y[ids] - au1 - fee(au1))[go_u & np.isfinite(au1)], ((1 - c.y[ids]) - ad1 - fee(ad1))[go_d & np.isfinite(ad1)]])
                 mk = np.concatenate([ids[go_u & np.isfinite(au1)], ids[go_d & np.isfinite(ad1)]])
-                row[name] = mboot(pnl, mk, 500)
+                row[name] = mboot(pnl, mk, 500, start_s=x.start_s)
                 row[name]["coverage"] = float(np.isfinite(au).mean())
             strat.append(row)
     res["anchor_strategy"] = strat
@@ -272,7 +277,7 @@ def E3(x: X) -> dict:
             side_up = r[ids] > 0
             a = np.where(side_up, x.side["up"]["ask"][ids, W0 + 1], x.side["down"]["ask"][ids, W0 + 1])
             yy = np.where(side_up, c.y[ids], 1 - c.y[ids]); ok = np.isfinite(a)
-            mm.append({"L_min": Lm, "split": name, **mboot((yy - a - fee(a))[ok], ids[ok], 500)})
+            mm.append({"L_min": Lm, "split": name, **mboot((yy - a - fee(a))[ok], ids[ok], 500, start_s=x.start_s)})
     res["momentum_strategy"] = mm
     return res
 
@@ -301,7 +306,7 @@ def E4(x: X) -> dict:
                             if np.isfinite(a1):
                                 pnl.append(x.side[sd]["y"][i] - a1 - fee(a1)); mk.append(i)
                             break
-                row[name] = mboot(np.array(pnl), np.array(mk), 500)
+                row[name] = mboot(np.array(pnl), np.array(mk), 500, start_s=x.start_s)
             sn.append(row)
     res["sniping"] = sn
     # (b) arbitrage de paire : dans une même seconde, un achat taker Up à a_u et un achat taker Down à a_d avec a_u + a_d < 1
